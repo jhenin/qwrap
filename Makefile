@@ -1,6 +1,6 @@
 
 VERSION=1.0
-TCLINC=/usr/include
+TCLINC=/usr/include/tcl
 PLUGINDIR=${HOME}/lib/vmd/plugins/LINUXAMD64/tcl
 
 CPP=g++
