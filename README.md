@@ -12,9 +12,9 @@ To use in VMD:
 > load path/to/qwrap.so 
 > qwrap [first n] [last n] [compound none|res|beta [refatoms occ|none]] [center <seltext>]
 ```
-* `first`, `last`: frames to be wrapped
-* `compound`: wrap groups of atoms instead of individual atoms. Groups can be VMD's `res`idues, or custom groups defined by a common value of the `beta` parameter. 
-* `refatoms`: if `compound` is set, each group may be wrapped according to its geometric center, or to the center of a set of reference atoms within the group. Then reference atoms are defined by nonzero `occ`upancy. An example use is to wrap lipid molecules as residues, and give all phosphorus atoms nonzero occupancy so that each lipid has its phosphorus atom in the center unit cell.
+* `first`, `last`: frames to be wrapped (defaults: 0 to -1, which means the last frame).
+* `compound`: wrap groups of atoms instead of individual atoms. Groups can be VMD's `res`idues (default), or custom groups defined by a common *integer* value of the `beta` parameter. 
+* `refatoms`: if `compound` is set, each group may be wrapped according to its geometric center, or to the center of a set of reference atoms within the group. Then reference atoms are defined by nonzero `occ`upancy (when converted to integer, that is, *greater than 1*). An example use is to wrap lipid molecules as residues, and give all phosphorus atoms nonzero occupancy so that each lipid has its phosphorus atom in the center unit cell.
 * `center`: the geometric center of the given selection text will be translated to (0, 0, 0). 
 
 Compared with PBCTools it's a coarse and rigid tool, mostly built to answer my own needs (e.g. orthorhombic cells only, the center of the cell is (0,0,0)...). But in my hands, it is 10 to 30 times faster. 
