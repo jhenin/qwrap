@@ -5,11 +5,13 @@ To install under Linux and the like:
 ```
 $ tar xf qwrap.tar.gz (in own directory) 
 $ make
+# update the PLUGINDIR variable in Makefile
+$ make install
 ```
 
 To use in VMD:
 ```
-> load path/to/qwrap.so 
+> package require qwrap
 > qwrap [first n] [last n] [compound none|res|beta [refatoms occ|none]] [center <seltext>] [sel <seltext>]
 ```
 * `sel`: selection text indicating atoms to be wrapped
