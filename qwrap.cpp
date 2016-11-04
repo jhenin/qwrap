@@ -18,8 +18,6 @@
  * Jerome Henin <jerome.henin@ibpc.fr> March 2013
  */
 
-// TODO: implement "sel" option
-
 extern "C" {
 int Qwrap_Init(Tcl_Interp *interp);
 }
@@ -98,22 +96,22 @@ int parse_ivector (Tcl_Obj * const obj, std::vector<int> &vec, Tcl_Interp *inter
 static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * const objv[])
 {
   Tcl_Obj *atomselect, *object, *bytes, *centersel;
-  int num, ncoords, result, length, ncenter;
+  int ncoords, result, length, ncenter, nsel;
   int num_frames, first_frame, last_frame;
+  int num_atoms;
   enum { NONE, RES, BETA } compound;
-  char *sel_text = NULL;
-  char *center_sel_text = NULL;
   bool refatoms;
+  const char *sel_text;
 
   std::vector<int> blockID;
   std::vector<int> centerID;
+  std::vector<int> selID;
   float *coords;
   std::vector<float> PBC;
   std::vector<int> is_ref;
-  unsigned char *array;
 
   if (argc % 2 != 1) {
-    Tcl_WrongNumArgs(interp, 1, objv, (char *)"[first <n>] [last <n>] [compound none|res|beta] [refatoms none|occ] [center <seltext>]");
+    Tcl_WrongNumArgs(interp, 1, objv, (char *)"[first <n>] [last <n>] [compound none|res|beta] [refatoms none|occ] [center <seltext>] [sel <seltext>]");
     return TCL_ERROR;
   }
 
@@ -123,6 +121,7 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
   first_frame = 0;
   last_frame = -1;
   ncenter = 0;
+  sel_text = NULL;
   refatoms = false;
 
   // end default values
@@ -155,14 +154,14 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
         return TCL_ERROR;
       }
 
-//    } else if (!strncmp(cmd, "sel", 4)) {
-//      sel_text = Tcl_GetString(objv[i+1]);
+    } else if (!strncmp(cmd, "sel", 4)) {
+      sel_text = Tcl_GetString(objv[i+1]);
 
     } else if (!strncmp(cmd, "center", 4)) {
-      Tcl_Obj *cmd = Tcl_ObjPrintf ("atomselect top \"%s\"", Tcl_GetString(objv[i+1]));
+      Tcl_Obj *cmd = Tcl_ObjPrintf("atomselect top \"%s\"", Tcl_GetString(objv[i+1]));
       result = Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT);
       if (result != TCL_OK) {
-        Tcl_SetResult(interp, (char *) "qwrap: error calling atomselect", TCL_STATIC);
+        Tcl_SetResult(interp, (char *) "qwrap: error calling atomselect for center", TCL_STATIC);
         return TCL_ERROR;
       }
       centersel = Tcl_GetObjResult(interp);
@@ -181,14 +180,29 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
     }
   }
 
-  result = Tcl_EvalEx(interp, "atomselect top all", -1, 0);
+  // Build main selection, which is 'all' unless otherwise specified with the sel option
+  if (sel_text == NULL) {
+    sel_text = "all";
+  }
+  Tcl_Obj *cmd =  Tcl_ObjPrintf("atomselect top \"%s\"", sel_text);
+  result = Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT);
   if (result != TCL_OK) {
-    Tcl_SetResult(interp, (char *) "qwrap: error calling atomselect", TCL_STATIC);
+    Tcl_SetResult(interp, (char *) "qwrap: error calling atomselect for complete selection", TCL_STATIC);
     return TCL_ERROR;
   }
   atomselect = Tcl_GetObjResult(interp);
   Tcl_IncrRefCount(atomselect);   // needed to retain the atomselect object beyond this point!
 
+  // ********* atom IDs for whole selection *******
+
+  Tcl_Obj *script = Tcl_DuplicateObj(atomselect); 
+  Tcl_AppendToObj (script, " get index", -1);
+  result = Tcl_EvalObjEx(interp, script, TCL_EVAL_DIRECT);
+  nsel = parse_ivector(Tcl_GetObjResult(interp), selID, interp, false );
+  if (nsel < 1) {
+    Tcl_SetResult(interp, (char *) "qwrap: no atoms in selection", TCL_STATIC);
+    return TCL_ERROR;
+  }
 
   // ********* block IDs *******
 
@@ -210,6 +224,19 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
       Tcl_SetResult(interp, (char *) "qwrap: error parsing atomselect result", TCL_STATIC);
       return TCL_ERROR;
     }
+  }
+
+  // ********* total number of atoms *******
+
+  result = Tcl_EvalEx(interp, "molinfo top get numatoms", -1, 0);
+  if (result != TCL_OK) {
+    Tcl_SetResult(interp, (char *) "qwrap: error calling molinfo", TCL_STATIC);
+    return TCL_ERROR;
+  }
+  object = Tcl_GetObjResult(interp);
+  if (Tcl_GetIntFromObj(interp, object, &num_atoms) != TCL_OK) {
+    Tcl_SetResult(interp, (char *) "qwrap: error parsing number of atoms", TCL_STATIC);
+    return TCL_ERROR;
   }
 
   // ********* reference atoms *******
@@ -273,10 +300,12 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
     if (result != TCL_OK) { return TCL_ERROR; }
 
     object = Tcl_GetObjResult(interp);
-    num = parse_vector(object, PBC, interp); 
-    if (num != 3 || PBC[0]*PBC[1]*PBC[2] == 0.0) {
-      Tcl_SetResult(interp, (char *) "qwrap: error parsing PBC", TCL_STATIC);
-      return TCL_ERROR;
+    {
+    int num = parse_vector(object, PBC, interp); 
+      if (num != 3 || PBC[0]*PBC[1]*PBC[2] == 0.0) {
+        Tcl_SetResult(interp, (char *) "qwrap: error parsing PBC", TCL_STATIC);
+        return TCL_ERROR;
+      }
     }
 
     Tcl_Obj *get_ts = Tcl_ObjPrintf ("gettimestep %s %i", "top", frame);
@@ -291,11 +320,6 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
     Tcl_InvalidateStringRep (bytes);
     coords = reinterpret_cast<float *> (Tcl_GetByteArrayFromObj(bytes, &length));
 
-    if ( length != 3 * ncoords * sizeof(float) ) {
-      Tcl_SetResult(interp, (char *) "qwrap: error getting coordinates (wrong data size)", TCL_STATIC);
-      return TCL_ERROR;
-    }
-
     // ******** centering *******
     float shift[3];
     for (int c = 0; c < 3; c++) shift[c] = 0.0;
@@ -305,6 +329,12 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
       }
       for (int c = 0; c < 3; c++) shift[c] /= ncenter;
     }
+    
+    for (int i = 0; i < num_atoms; i++) {
+      for (int c = 0; c < 3; c++) {
+        coords[3*i + c] -= shift[c];
+      }
+    }
 
     // ******** wrapping *******
     float ref_pos[3];
@@ -312,7 +342,7 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
 
     for (int start_atom = 0; start_atom < ncoords; ) {
 
-      if ( compound != NONE ) { // ref position is the center of ref atoms of the block, shifted
+      if ( compound != NONE ) { // ref position is the center of ref atoms of the block
         current_block = blockID[start_atom];
         n_ref = 0;  // number of reference atoms within current block
         for (int c = 0; c < 3; c++) ref_pos[c] = 0.0;
@@ -324,9 +354,9 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
           if (refatoms && is_ref[current_atom] == 0)  // skip non-ref atoms
             continue;
 
+          // accumulating average position of block
           for (int c = 0; c < 3; c++) {
-            coords[3*current_atom + c] -= shift[c];
-            ref_pos[c] += coords[3*current_atom + c];
+            ref_pos[c] += coords[3*selID[current_atom] + c];
           }
           n_ref++;
         }
@@ -336,11 +366,10 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
         }
         for (int c = 0; c < 3; c++) ref_pos[c] /= n_ref;
 
-      } else {  // ref position is simply the atom position, shifted by pos of centering group
+      } else {  // ref position is simply the atom position
         current_atom = start_atom;
         for (int c = 0; c < 3; c++) {
-          coords[3*current_atom + c] -= shift[c];
-          ref_pos[c] = coords[3*current_atom + c];
+          ref_pos[c] = coords[3*selID[current_atom] + c];
         }
         current_atom++;
       }
@@ -348,7 +377,7 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
       truncate (ref_pos, PBC);
       
       for (int i = start_atom; i < current_atom; i++) {
-        for (int c = 0; c < 3; c++) coords[3*i + c] -= ref_pos[c];
+        for (int c = 0; c < 3; c++) coords[3*selID[i] + c] -= ref_pos[c];
       } 
 
       start_atom = current_atom;
