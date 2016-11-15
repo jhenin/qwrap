@@ -99,7 +99,7 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
   int ncoords, result, length, ncenter, nsel;
   int num_frames, first_frame, last_frame;
   int num_atoms;
-  enum { NONE, RES, BETA } compound;
+  enum { NONE, RES, BETA, FRAGMENT } compound;
   bool refatoms;
   const char *sel_text;
 
@@ -111,7 +111,7 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
   std::vector<int> is_ref;
 
   if (argc % 2 != 1) {
-    Tcl_WrongNumArgs(interp, 1, objv, (char *)"[first <n>] [last <n>] [compound none|res|beta] [refatoms none|occ] [center <seltext>] [sel <seltext>]");
+    Tcl_WrongNumArgs(interp, 1, objv, (char *)"[first <n>] [last <n>] [compound none|res|beta|fragment] [refatoms none|occ] [center <seltext>] [sel <seltext>]");
     return TCL_ERROR;
   }
 
@@ -139,6 +139,7 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
       if (!strncmp(comp, "res", 4)) compound = RES;
       else if (!strncmp(comp, "none", 4)) compound = NONE;
       else if (!strncmp(comp, "beta", 4)) compound = BETA;
+      else if (!strncmp(comp, "fragment", 4)) compound = FRAGMENT;
       else {
         Tcl_SetResult(interp, (char *) "qwrap: unknown compound type", TCL_STATIC);
         return TCL_ERROR;
@@ -175,7 +176,7 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
         return TCL_ERROR;
       }
     } else {
-      Tcl_SetResult(interp, (char *) "Usage: qwrap [first <n>] [last <n>] [compound none|res|beta] [center <seltext>]", TCL_STATIC);
+      Tcl_SetResult(interp, (char *) "Usage: qwrap [first <n>] [last <n>] [compound none|res|beta|fragment] [center <seltext>]", TCL_STATIC);
       return TCL_ERROR;
     }
   }
@@ -212,6 +213,8 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
       Tcl_AppendToObj (script, " get residue", -1);
     else if ( compound == BETA )
       Tcl_AppendToObj (script, " get beta", -1);
+    else if ( compound == FRAGMENT )
+      Tcl_AppendToObj (script, " get fragment", -1);
     else // this case is just to find out how many atoms we have
       Tcl_AppendToObj (script, " get occupancy", -1);
     result = Tcl_EvalObjEx(interp, script, TCL_EVAL_DIRECT);
