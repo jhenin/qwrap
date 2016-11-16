@@ -15,7 +15,7 @@
  * 4) it only deals with orthorhombic boxes
  * 5) I can't count!
  *
- * Jerome Henin <jerome.henin@ibpc.fr> March 2013
+ * Jerome Henin <jerome.henin@ibpc.fr> 2013-2016
  */
 
 extern "C" {
@@ -23,16 +23,17 @@ int Qwrap_Init(Tcl_Interp *interp);
 }
 static int obj_qwrap(ClientData, Tcl_Interp *interp, int argc, Tcl_Obj * const objv[]);
 
-// this is "truncating" a to integer number of times b
+// Calculate the shift as an integer multiple of vector b
 // such as a is between -b/2 and +b/2
 
-void truncate(float *a, const std::vector<float> &b)
+void calc_shift(float *a, const std::vector<float> &b)
 {
   for (int c=0; c<3; c++)
     a[c] = floor (a[c] / b[c] + 0.5) * b[c];
   return;
 }
 
+// Parse a vector of floats from a Tcl object
 int parse_vector (Tcl_Obj * const obj, std::vector<float> &vec, Tcl_Interp *interp)
 {
   Tcl_Obj **data;
@@ -57,6 +58,7 @@ int parse_vector (Tcl_Obj * const obj, std::vector<float> &vec, Tcl_Interp *inte
   return num;
 }
 
+// Parse a vector of integers from a Tcl object
 int parse_ivector (Tcl_Obj * const obj, std::vector<int> &vec, Tcl_Interp *interp, bool fromDouble)
 {
   Tcl_Obj **data;
@@ -279,6 +281,7 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
   if (print < 10) print = 10;
   if (print > 100) print = 100;
 
+  // Loop on frames
   for (int frame = first_frame; frame <= last_frame; frame++) {
 
     if (frame % print == 0) {
@@ -296,7 +299,7 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
     result = Tcl_EvalObjEx(interp, mol_chgframe, TCL_EVAL_DIRECT);
     if (result != TCL_OK) { return TCL_ERROR; }
 
-    // ********* PBC *******
+    // ********* get current PBC *******
 
     Tcl_Obj *get_abc = Tcl_ObjPrintf ("molinfo top get {a b c}");
     result = Tcl_EvalObjEx(interp, get_abc, TCL_EVAL_DIRECT);
@@ -310,6 +313,8 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
         return TCL_ERROR;
       }
     }
+
+    // ********* get current coordinates *******
 
     Tcl_Obj *get_ts = Tcl_ObjPrintf ("gettimestep %s %i", "top", frame);
     result = Tcl_EvalObjEx(interp, get_ts,  TCL_EVAL_DIRECT);
@@ -345,6 +350,9 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
 
     for (int start_atom = 0; start_atom < ncoords; ) {
 
+      // First, get the reference position of the current wrapping block
+      // (ie the center of its reference atoms)
+
       if ( compound != NONE ) { // ref position is the center of ref atoms of the block
         current_block = blockID[start_atom];
         n_ref = 0;  // number of reference atoms within current block
@@ -357,7 +365,6 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
           if (refatoms && is_ref[current_atom] == 0)  // skip non-ref atoms
             continue;
 
-          // accumulating average position of block
           for (int c = 0; c < 3; c++) {
             ref_pos[c] += coords[3*selID[current_atom] + c];
           }
@@ -377,17 +384,20 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
         current_atom++;
       }
 
-      truncate (ref_pos, PBC);
+      // Get the shift needed to wrap the reference position
+      calc_shift (ref_pos, PBC);
       
+      // Actually shift all atoms within the wrapping block
       for (int i = start_atom; i < current_atom; i++) {
         for (int c = 0; c < 3; c++) coords[3*selID[i] + c] -= ref_pos[c];
       } 
 
+      // Next wrapping block starts here
       start_atom = current_atom;
     }
     // ******** wrapping done *******
 
-    // call rawtimestep to set byte array
+    // call rawtimestep to set VMD coords from byte array
     Tcl_Obj *set_ts[5];
 
     set_ts[0] = Tcl_NewStringObj("rawtimestep", -1);
