@@ -8,5 +8,5 @@
 # script is sourced, the variable $dir must contain the
 # full path name of this file's directory.
 
-package ifneeded qwrap 1.1 [list load [file join $dir qwrap.so ]]
+package ifneeded qwrap 1.2 [list load [file join $dir qwrap.so ]]
 

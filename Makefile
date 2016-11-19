@@ -1,5 +1,5 @@
 
-VERSION=1.1
+VERSION=1.2
 TCLINC=/usr/include/tcl
 PLUGINDIR=${HOME}/lib/vmd/plugins/LINUXAMD64/tcl
 

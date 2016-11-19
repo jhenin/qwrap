@@ -33,6 +33,15 @@ void calc_shift(float *a, const std::vector<float> &b)
   return;
 }
 
+// This version (for unwrap) gets the shift as integers
+// (in units of PBC vectors)
+void calc_shift_int(float *a, const std::vector<float> &b, int shift[3])
+{
+  for (int c=0; c<3; c++)
+    shift[c] = int(floor (a[c] / b[c] + 0.5));
+  return;
+}
+
 // Parse a vector of floats from a Tcl object
 int parse_vector (Tcl_Obj * const obj, std::vector<float> &vec, Tcl_Interp *interp)
 {
@@ -95,7 +104,8 @@ int parse_ivector (Tcl_Obj * const obj, std::vector<int> &vec, Tcl_Interp *inter
 // ***************************************************************************************
 // ***************************************************************************************
 
-static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * const objv[])
+
+static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * const objv[], bool unwrap)
 {
   Tcl_Obj *atomselect, *object, *bytes, *centersel;
   int ncoords, result, length, ncenter, nsel;
@@ -108,9 +118,11 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
   std::vector<int> blockID;
   std::vector<int> centerID;
   std::vector<int> selID;
-  float *coords;
+  std::vector<float> prev_pos;
+  std::vector<int> shifts;
   std::vector<float> PBC;
   std::vector<int> is_ref;
+  float *coords;
 
   if (argc % 2 != 1) {
     Tcl_WrongNumArgs(interp, 1, objv, (char *)"[first <n>] [last <n>] [compound none|res|beta|fragment] [refatoms none|occ] [center <seltext>] [sel <seltext>]");
@@ -161,6 +173,10 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
       sel_text = Tcl_GetString(objv[i+1]);
 
     } else if (!strncmp(cmd, "center", 4)) {
+      if (unwrap) {
+        Tcl_SetResult(interp, (char *) "qwrap: qunwrap does not support the center option", TCL_STATIC);
+        return TCL_ERROR;
+      }
       Tcl_Obj *cmd = Tcl_ObjPrintf("atomselect top \"%s\"", Tcl_GetString(objv[i+1]));
       result = Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT);
       if (result != TCL_OK) {
@@ -229,6 +245,24 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
       Tcl_SetResult(interp, (char *) "qwrap: error parsing atomselect result", TCL_STATIC);
       return TCL_ERROR;
     }
+
+    if (unwrap) {
+      // to unwrap, we need to store one set of previous coordinates per block
+      // we also set blockIDs to consecutive integers
+      
+      int nblocks = 1;
+      int current_block = blockID[0];
+      blockID[0] = 0;
+      for (int i = 1; i < ncoords; i++) {
+        if (blockID[i] != current_block) {
+          current_block = blockID[i];
+          nblocks++;
+        }
+        blockID[i] = nblocks - 1;
+      }
+      prev_pos.resize(3 * nblocks);
+      shifts.resize(3 * nblocks);
+    }
   }
 
   // ********* total number of atoms *******
@@ -285,7 +319,7 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
   for (int frame = first_frame; frame <= last_frame; frame++) {
 
     if (frame % print == 0) {
-      Tcl_Obj *msg = Tcl_ObjPrintf ("puts \"Wrapping frame %i\"", frame);
+      Tcl_Obj *msg = Tcl_ObjPrintf ("puts \"Frame %i\"", frame);
       result = Tcl_EvalObjEx(interp, msg, TCL_EVAL_DIRECT);
       if (result != TCL_OK) { return TCL_ERROR; }
     }
@@ -328,19 +362,21 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
     Tcl_InvalidateStringRep (bytes);
     coords = reinterpret_cast<float *> (Tcl_GetByteArrayFromObj(bytes, &length));
 
-    // ******** centering *******
-    float shift[3];
-    for (int c = 0; c < 3; c++) shift[c] = 0.0;
-    if ( ncenter != 0 ) {
-      for (int i = 0; i < ncenter; i++) {
-        for (int c = 0; c < 3; c++) shift[c] += coords[3 * centerID[i] + c]; 
+    if (!unwrap) {
+      // ******** centering *******
+      float shift[3];
+      for (int c = 0; c < 3; c++) shift[c] = 0.0;
+      if ( ncenter != 0 ) {
+        for (int i = 0; i < ncenter; i++) {
+          for (int c = 0; c < 3; c++) shift[c] += coords[3 * centerID[i] + c]; 
+        }
+        for (int c = 0; c < 3; c++) shift[c] /= ncenter;
       }
-      for (int c = 0; c < 3; c++) shift[c] /= ncenter;
-    }
-    
-    for (int i = 0; i < num_atoms; i++) {
-      for (int c = 0; c < 3; c++) {
-        coords[3*i + c] -= shift[c];
+      
+      for (int i = 0; i < num_atoms; i++) {
+        for (int c = 0; c < 3; c++) {
+          coords[3*i + c] -= shift[c];
+        }
       }
     }
 
@@ -384,13 +420,37 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
         current_atom++;
       }
 
-      // Get the shift needed to wrap the reference position
-      calc_shift (ref_pos, PBC);
-      
-      // Actually shift all atoms within the wrapping block
-      for (int i = start_atom; i < current_atom; i++) {
-        for (int c = 0; c < 3; c++) coords[3*selID[i] + c] -= ref_pos[c];
-      } 
+      if (unwrap) {
+        float tmp;
+        int shift[3];
+        for (int c = 0; c < 3; c++) {
+          tmp = ref_pos[c]; // remember ref position
+          ref_pos[c] -= prev_pos[current_block * 3 + c]; // new refpos is the displacement from previous one
+          prev_pos[current_block * 3 + c] = tmp;  // save the refpos for next frame
+        }
+        if (frame != first_frame) {
+          // Get the shift needed to unwrap the reference position, increment the shift counter
+          calc_shift_int(ref_pos, PBC, shift);
+          for (int c = 0; c < 3; c++) {
+            shifts[current_block * 3 + c] += shift[c];
+          }
+
+          // Actually shift all atoms within the unwrapping block
+          for (int i = start_atom; i < current_atom; i++) {
+            for (int c = 0; c < 3; c++) coords[3*selID[i] + c] -= shifts[current_block * 3 + c] * PBC[c];
+          } 
+        }
+
+      } else {
+
+        // Get the shift needed to wrap the reference position
+        calc_shift(ref_pos, PBC);
+
+        // Actually shift all atoms within the wrapping block
+        for (int i = start_atom; i < current_atom; i++) {
+          for (int c = 0; c < 3; c++) coords[3*selID[i] + c] -= ref_pos[c];
+        } 
+      }
 
       // Next wrapping block starts here
       start_atom = current_atom;
@@ -417,11 +477,26 @@ static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * co
   return TCL_OK;
 }
 
+
+// "Wrapper" functions
+
+static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * const objv[])
+{
+    return do_qwrap(data, interp, argc, objv, false);
+}
+
+static int obj_qunwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * const objv[])
+{
+    return do_qwrap(data, interp, argc, objv, true);
+}
+
 extern "C" {
   int Qwrap_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "qwrap", obj_qwrap,
                     (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
-    Tcl_EvalEx(interp, "package provide qwrap 1.0", -1, 0);
+    Tcl_CreateObjCommand(interp, "qunwrap", obj_qunwrap,
+                    (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
+    Tcl_EvalEx(interp, "package provide qwrap 1.2", -1, 0);
     return TCL_OK;
   }
 }
