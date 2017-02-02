@@ -334,17 +334,20 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
     if (result != TCL_OK) { return TCL_ERROR; }
 
     // ********* get current PBC *******
+    // except if unwrapping and at first frame, then it's not needed
 
-    Tcl_Obj *get_abc = Tcl_ObjPrintf ("molinfo top get {a b c}");
-    result = Tcl_EvalObjEx(interp, get_abc, TCL_EVAL_DIRECT);
-    if (result != TCL_OK) { return TCL_ERROR; }
+    if (!(unwrap && frame == first_frame)) {
+      Tcl_Obj *get_abc = Tcl_ObjPrintf ("molinfo top get {a b c}");
+      result = Tcl_EvalObjEx(interp, get_abc, TCL_EVAL_DIRECT);
+      if (result != TCL_OK) { return TCL_ERROR; }
 
-    object = Tcl_GetObjResult(interp);
-    {
-    int num = parse_vector(object, PBC, interp); 
-      if (num != 3 || PBC[0]*PBC[1]*PBC[2] == 0.0) {
-        Tcl_SetResult(interp, (char *) "qwrap: error parsing PBC", TCL_STATIC);
-        return TCL_ERROR;
+      object = Tcl_GetObjResult(interp);
+      {
+      int num = parse_vector(object, PBC, interp); 
+        if (num != 3 || PBC[0]*PBC[1]*PBC[2] == 0.0) {
+          Tcl_SetResult(interp, (char *) "qwrap: error parsing PBC", TCL_STATIC);
+          return TCL_ERROR;
+        }
       }
     }
 
