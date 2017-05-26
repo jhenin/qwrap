@@ -1,4 +1,4 @@
-# qwrap — A fast PBC wrapping and unwrapping function for VMD
+# qwrap — Fast PBC wrapping and unwrapping for VMD
 
 ## Installation
 To install under Linux and the like:
