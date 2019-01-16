@@ -337,15 +337,23 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
     // except if unwrapping and at first frame, then it's not needed
 
     if (!(unwrap && frame == first_frame)) {
-      Tcl_Obj *get_abc = Tcl_ObjPrintf ("molinfo top get {a b c}");
+      Tcl_Obj *get_abc = Tcl_ObjPrintf ("molinfo top get {a b c alpha beta gamma}");
       result = Tcl_EvalObjEx(interp, get_abc, TCL_EVAL_DIRECT);
       if (result != TCL_OK) { return TCL_ERROR; }
 
       object = Tcl_GetObjResult(interp);
       {
       int num = parse_vector(object, PBC, interp); 
-        if (num != 3 || PBC[0]*PBC[1]*PBC[2] == 0.0) {
+        if (num != 6) {
           Tcl_SetResult(interp, (char *) "qwrap: error parsing PBC", TCL_STATIC);
+          return TCL_ERROR;
+        }
+        if (PBC[0]*PBC[1]*PBC[2] == 0.0) {
+          Tcl_SetResult(interp, (char *) "qwrap: error: at least one PBC box length is zero", TCL_STATIC);
+          return TCL_ERROR;
+        }
+        if (PBC[3] != 90. || PBC[4] != 90. || PBC[5] != 90.) {
+          Tcl_SetResult(interp, (char *) "qwrap: non-orthorhombic cell detected, unsupported by qwrap; use PbcTools for this system", TCL_STATIC);
           return TCL_ERROR;
         }
       }
@@ -499,7 +507,7 @@ extern "C" {
                     (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
     Tcl_CreateObjCommand(interp, "qunwrap", obj_qunwrap,
                     (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
-    Tcl_EvalEx(interp, "package provide qwrap 1.2", -1, 0);
+    Tcl_EvalEx(interp, "package provide qwrap " VERSION, -1, 0);
     return TCL_OK;
   }
 }
