@@ -4,7 +4,7 @@ TCLINC=/usr/include/tcl8.6
 PLUGINDIR=${HOME}/lib/vmd/plugins/LINUXAMD64/tcl
 
 CPP=g++
-#CPPFLAGS=-fpic -g -I${TCLINC}
+#CPPFLAGS=-fpic -g -I${TCLINC} -DVERSION=\"${VERSION}\"
 CPPFLAGS=-fpic -O3 -I${TCLINC} -DVERSION=\"${VERSION}\"
 
 all: qwrap.so pkgIndex.tcl

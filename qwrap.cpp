@@ -15,7 +15,7 @@
  * 4) it only deals with orthorhombic boxes
  * 5) I can't count!
  *
- * Jerome Henin <jerome.henin@ibpc.fr> 2013-2016
+ * Jerome Henin <jerome.henin@ibpc.fr> 2013-2020
  */
 
 extern "C" {
@@ -249,16 +249,21 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
     if (unwrap) {
       // to unwrap, we need to store one set of previous coordinates per block
       // we also set blockIDs to consecutive integers
-      
       int nblocks = 1;
-      int current_block = blockID[0];
-      blockID[0] = 0;
-      for (int i = 1; i < ncoords; i++) {
-        if (blockID[i] != current_block) {
-          current_block = blockID[i];
-          nblocks++;
+
+      if (compound == NONE) {
+        // We don't have meaningful blockIDs in this case
+        nblocks = ncoords;
+      } else {
+        int current_block = blockID[0];
+        blockID[0] = 0;
+        for (int i = 1; i < ncoords; i++) {
+          if (blockID[i] != current_block) {
+            current_block = blockID[i];
+            nblocks++;
+          }
+          blockID[i] = nblocks - 1;
         }
-        blockID[i] = nblocks - 1;
       }
       prev_pos.resize(3 * nblocks);
       shifts.resize(3 * nblocks);
@@ -391,7 +396,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
       }
     }
 
-    // ******** wrapping *******
+    // ******** (un)wrapping *******
     float ref_pos[3];
     int current_block, n_ref, current_atom;
 
@@ -423,23 +428,23 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
         }
         for (int c = 0; c < 3; c++) ref_pos[c] /= n_ref;
 
-      } else {  // ref position is simply the atom position
+      } else {  // compound == NONE: ref position is simply the atom position
         current_atom = start_atom;
+        current_block = start_atom; // no need for blockID array
         for (int c = 0; c < 3; c++) {
           ref_pos[c] = coords[3*selID[current_atom] + c];
         }
-        current_atom++;
+        current_atom++; // Will be the next start_atom
       }
 
       if (unwrap) {
-        float tmp;
-        int shift[3];
         for (int c = 0; c < 3; c++) {
-          tmp = ref_pos[c]; // remember ref position
+          float tmp = ref_pos[c]; // remember ref position
           ref_pos[c] -= prev_pos[current_block * 3 + c]; // new refpos is the displacement from previous one
           prev_pos[current_block * 3 + c] = tmp;  // save the refpos for next frame
         }
         if (frame != first_frame) {
+          int shift[3];
           // Get the shift needed to unwrap the reference position, increment the shift counter
           calc_shift_int(ref_pos, PBC, shift);
           for (int c = 0; c < 3; c++) {
