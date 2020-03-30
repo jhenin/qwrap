@@ -7,6 +7,7 @@ $ tar xf qwrap.tar.gz (in own directory)
 $ make
 # update the PLUGINDIR variable in Makefile
 $ make install
+# use 'sudo make install' if VMD is not installed within your user directory
 ```
 
 ## Usage
