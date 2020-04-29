@@ -1,5 +1,12 @@
 # qwrap — Fast PBC wrapping and unwrapping for VMD
 
+## Using without installing
+In a VMD terminal or TkCon:
+```
+load <path_to/>qwrap.so
+```
+That's it, you can now use the `qwrap` command.
+
 ## Installation
 To install under Linux and the like:
 ```
