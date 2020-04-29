@@ -5,7 +5,7 @@ PLUGINDIR=${HOME}/lib/vmd/plugins/LINUXAMD64/tcl
 
 CPP=g++
 #CPPFLAGS=-fpic -g -I${TCLINC} -DVERSION=\"${VERSION}\"
-CPPFLAGS=-fpic -O3 -I${TCLINC} -DVERSION=\"${VERSION}\"
+CPPFLAGS=-fpic -O3 -Wall -ansi -pedantic -fno-for-scope -I${TCLINC} -DVERSION=\"${VERSION}\"
 
 all: qwrap.so pkgIndex.tcl
 

@@ -10,7 +10,7 @@
  * there are two differences:
  * 1) the center of each "wrapping block" is the reference point, rather than one given atom
  * 2) it's faster (up to 30 times in my tests)
- * 3) some options are hard-coded right now, they're the most likely ones for a 
+ * 3) some options are hard-coded right now, they're the most likely ones for a
  *    trajectory from a NAMD biomolecular simulation.
  * 4) it only deals with orthorhombic boxes
  * 5) I can't count!
@@ -71,7 +71,7 @@ int parse_vector (Tcl_Obj * const obj, std::vector<float> &vec, Tcl_Interp *inte
 int parse_ivector (Tcl_Obj * const obj, std::vector<int> &vec, Tcl_Interp *interp, bool fromDouble)
 {
   Tcl_Obj **data;
-  int num;
+  int num, i;
   double d;
 
   if (Tcl_ListObjGetElements(interp, obj, &num, &data) != TCL_OK) {
@@ -82,7 +82,7 @@ int parse_ivector (Tcl_Obj * const obj, std::vector<int> &vec, Tcl_Interp *inter
   vec.resize(num);
 
   if (fromDouble == false) {
-    for (int i = 0; i < num; i++) {
+    for (i = 0; i < num; i++) {
       if (Tcl_GetIntFromObj(interp, data[i], &vec[i]) != TCL_OK) {
         Tcl_SetResult(interp, (char *) "qwrap: error parsing vector element as integer", TCL_STATIC);
         return -1;
@@ -90,7 +90,7 @@ int parse_ivector (Tcl_Obj * const obj, std::vector<int> &vec, Tcl_Interp *inter
     }
   } else {
     // do a double-to-int conversion first
-    for (int i = 0; i < num; i++) {
+    for (i = 0; i < num; i++) {
       if (Tcl_GetDoubleFromObj(interp, data[i], &d) != TCL_OK) {
         Tcl_SetResult(interp, (char *) "qwrap: error parsing vector element as integer", TCL_STATIC);
         return -1;
@@ -114,6 +114,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
   enum { NONE, RES, BETA, FRAGMENT } compound;
   bool refatoms;
   const char *sel_text;
+  int i, c;
 
   std::vector<int> blockID;
   std::vector<int> centerID;
@@ -140,7 +141,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
 
   // end default values
 
-  for (int i = 1; i + 1 < argc; i += 2) { 
+  for (i = 1; i + 1 < argc; i += 2) {
     const char *cmd = Tcl_GetString(objv[i]);
     if (!strncmp(cmd, "first", 4)) {
       if (Tcl_GetIntFromObj(interp, objv[i+1], &first_frame) != TCL_OK) { return TCL_ERROR; }
@@ -185,7 +186,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
       }
       centersel = Tcl_GetObjResult(interp);
       Tcl_IncrRefCount(centersel);
-      Tcl_Obj *script = Tcl_DuplicateObj(centersel); 
+      Tcl_Obj *script = Tcl_DuplicateObj(centersel);
       Tcl_AppendToObj (script, " get index", -1);
       result = Tcl_EvalObjEx(interp, script, TCL_EVAL_DIRECT);
       ncenter = parse_ivector(Tcl_GetObjResult(interp), centerID, interp, false );
@@ -214,7 +215,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
 
   // ********* atom IDs for whole selection *******
 
-  Tcl_Obj *script = Tcl_DuplicateObj(atomselect); 
+  Tcl_Obj *script = Tcl_DuplicateObj(atomselect);
   Tcl_AppendToObj (script, " get index", -1);
   result = Tcl_EvalObjEx(interp, script, TCL_EVAL_DIRECT);
   nsel = parse_ivector(Tcl_GetObjResult(interp), selID, interp, false );
@@ -227,7 +228,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
 
   {
     Tcl_Obj *script = Tcl_DuplicateObj(atomselect);
-    if ( compound == RES ) 
+    if ( compound == RES )
       Tcl_AppendToObj (script, " get residue", -1);
     else if ( compound == BETA )
       Tcl_AppendToObj (script, " get beta", -1);
@@ -257,7 +258,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
       } else {
         int current_block = blockID[0];
         blockID[0] = 0;
-        for (int i = 1; i < ncoords; i++) {
+        for (i = 1; i < ncoords; i++) {
           if (blockID[i] != current_block) {
             current_block = blockID[i];
             nblocks++;
@@ -315,7 +316,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
     Tcl_SetResult(interp, (char *) "qwrap: illegal value of first_frame", TCL_STATIC);
     return TCL_ERROR;
   }
-  if ( last_frame == -1 || last_frame >= num_frames ) last_frame = num_frames - 1;  
+  if ( last_frame == -1 || last_frame >= num_frames ) last_frame = num_frames - 1;
   int print = ((last_frame - first_frame) / 10);
   if (print < 10) print = 10;
   if (print > 100) print = 100;
@@ -333,7 +334,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
     Tcl_AppendPrintfToObj (chgframe, " frame %i", frame);
     result = Tcl_EvalObjEx(interp, chgframe, TCL_EVAL_DIRECT);
     if (result != TCL_OK) { return TCL_ERROR; }
-     
+
     Tcl_Obj *mol_chgframe = Tcl_ObjPrintf ("molinfo top set frame %i", frame);
     result = Tcl_EvalObjEx(interp, mol_chgframe, TCL_EVAL_DIRECT);
     if (result != TCL_OK) { return TCL_ERROR; }
@@ -348,7 +349,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
 
       object = Tcl_GetObjResult(interp);
       {
-      int num = parse_vector(object, PBC, interp); 
+      int num = parse_vector(object, PBC, interp);
         if (num != 6) {
           Tcl_SetResult(interp, (char *) "qwrap: error parsing PBC", TCL_STATIC);
           return TCL_ERROR;
@@ -372,7 +373,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
       Tcl_SetResult(interp, (char *) "qwrap: error getting coordinates", TCL_STATIC);
       return TCL_ERROR;
     }
-    
+
     bytes = Tcl_GetObjResult(interp);
     Tcl_IncrRefCount(bytes);
     Tcl_InvalidateStringRep (bytes);
@@ -381,16 +382,16 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
     if (!unwrap) {
       // ******** centering *******
       float shift[3];
-      for (int c = 0; c < 3; c++) shift[c] = 0.0;
+      for (c = 0; c < 3; c++) shift[c] = 0.0;
       if ( ncenter != 0 ) {
-        for (int i = 0; i < ncenter; i++) {
-          for (int c = 0; c < 3; c++) shift[c] += coords[3 * centerID[i] + c]; 
+        for (i = 0; i < ncenter; i++) {
+          for (c = 0; c < 3; c++) shift[c] += coords[3 * centerID[i] + c];
         }
-        for (int c = 0; c < 3; c++) shift[c] /= ncenter;
+        for (c = 0; c < 3; c++) shift[c] /= ncenter;
       }
-      
-      for (int i = 0; i < num_atoms; i++) {
-        for (int c = 0; c < 3; c++) {
+
+      for (i = 0; i < num_atoms; i++) {
+        for (c = 0; c < 3; c++) {
           coords[3*i + c] -= shift[c];
         }
       }
@@ -399,6 +400,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
     // ******** (un)wrapping *******
     float ref_pos[3];
     int current_block, n_ref, current_atom;
+    int c;
 
     for (int start_atom = 0; start_atom < ncoords; ) {
 
@@ -408,16 +410,16 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
       if ( compound != NONE ) { // ref position is the center of ref atoms of the block
         current_block = blockID[start_atom];
         n_ref = 0;  // number of reference atoms within current block
-        for (int c = 0; c < 3; c++) ref_pos[c] = 0.0;
+        for (c = 0; c < 3; c++) ref_pos[c] = 0.0;
 
         for ( current_atom = start_atom;
               current_atom < ncoords && blockID[current_atom] == current_block;
               current_atom++) {
-          
+
           if (refatoms && is_ref[current_atom] == 0)  // skip non-ref atoms
             continue;
 
-          for (int c = 0; c < 3; c++) {
+          for (c = 0; c < 3; c++) {
             ref_pos[c] += coords[3*selID[current_atom] + c];
           }
           n_ref++;
@@ -426,19 +428,19 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
           Tcl_SetResult(interp, (char *) "qwrap: block contains no reference atoms", TCL_STATIC);
           return TCL_ERROR;
         }
-        for (int c = 0; c < 3; c++) ref_pos[c] /= n_ref;
+        for (c = 0; c < 3; c++) ref_pos[c] /= n_ref;
 
       } else {  // compound == NONE: ref position is simply the atom position
         current_atom = start_atom;
         current_block = start_atom; // no need for blockID array
-        for (int c = 0; c < 3; c++) {
+        for (c = 0; c < 3; c++) {
           ref_pos[c] = coords[3*selID[current_atom] + c];
         }
         current_atom++; // Will be the next start_atom
       }
 
       if (unwrap) {
-        for (int c = 0; c < 3; c++) {
+        for (c = 0; c < 3; c++) {
           float tmp = ref_pos[c]; // remember ref position
           ref_pos[c] -= prev_pos[current_block * 3 + c]; // new refpos is the displacement from previous one
           prev_pos[current_block * 3 + c] = tmp;  // save the refpos for next frame
@@ -447,14 +449,14 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
           int shift[3];
           // Get the shift needed to unwrap the reference position, increment the shift counter
           calc_shift_int(ref_pos, PBC, shift);
-          for (int c = 0; c < 3; c++) {
+          for (c = 0; c < 3; c++) {
             shifts[current_block * 3 + c] += shift[c];
           }
 
           // Actually shift all atoms within the unwrapping block
-          for (int i = start_atom; i < current_atom; i++) {
-            for (int c = 0; c < 3; c++) coords[3*selID[i] + c] -= shifts[current_block * 3 + c] * PBC[c];
-          } 
+          for (i = start_atom; i < current_atom; i++) {
+            for (c = 0; c < 3; c++) coords[3*selID[i] + c] -= shifts[current_block * 3 + c] * PBC[c];
+          }
         }
 
       } else {
@@ -463,9 +465,9 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
         calc_shift(ref_pos, PBC);
 
         // Actually shift all atoms within the wrapping block
-        for (int i = start_atom; i < current_atom; i++) {
-          for (int c = 0; c < 3; c++) coords[3*selID[i] + c] -= ref_pos[c];
-        } 
+        for (i = start_atom; i < current_atom; i++) {
+          for (c = 0; c < 3; c++) coords[3*selID[i] + c] -= ref_pos[c];
+        }
       }
 
       // Next wrapping block starts here
