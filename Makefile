@@ -1,16 +1,16 @@
 
 VERSION=1.3
-TCLINC=/usr/include/tcl8.6
+TCLINC=-I/usr/include/tcl8.6
+TCLLIB=-I/usr/lib64
 PLUGINDIR=${HOME}/lib/vmd/plugins/LINUXAMD64/tcl
 
 CPP=g++
-#CPPFLAGS=-fpic -g -I${TCLINC} -DVERSION=\"${VERSION}\"
-CPPFLAGS=-fpic -O3 -Wall -ansi -pedantic -fno-for-scope -I${TCLINC} -DVERSION=\"${VERSION}\"
+CPPFLAGS=-fpic -O3 -Wall -ansi -pedantic -fno-for-scope ${TCLINC} -DVERSION=\"${VERSION}\"
 
 all: qwrap.so pkgIndex.tcl
 
 qwrap.so: qwrap.o
-	$(CPP) -shared qwrap.o -o qwrap.so 
+	$(CPP) -shared qwrap.o -o qwrap.so ${TCLLIB}
 
 qwrap.tar.gz: qwrap.cpp Makefile pkgIndex.tcl
 	tar czf qwrap${VERSION}.tar.gz qwrap.cpp Makefile pkgIndex.tcl
@@ -19,7 +19,7 @@ pkgIndex.tcl: qwrap.so
 	tclsh mkindex.tcl
 
 clean:
-	rm *.o *.so *.tar.gz
+	rm *.o *.so
 
 install: all
 	mkdir -p ${PLUGINDIR}/qwrap${VERSION} && \
