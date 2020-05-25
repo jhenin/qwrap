@@ -1,5 +1,9 @@
 # qwrap — Fast PBC wrapping and unwrapping for VMD
 
+## Development news
+As of version 1.4, unwrapping is done according to the algorithm of von Bülow, Bullerjahn and Hummer (https://arxiv.org/pdf/2003.09205.pdf) to obtain correct diffusion coefficient at long times.
+Note that the algorithm used up to version 1.3 was already similar to this one, and gave only small, bounded deviations from the true long-time diffusion.
+
 ## Using without installing
 In a VMD terminal or TkCon:
 ```
