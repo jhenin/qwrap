@@ -1,4 +1,5 @@
 # qwrap — Fast PBC wrapping and unwrapping for VMD
+[![DOI](https://zenodo.org/badge/31314121.svg)](https://zenodo.org/badge/latestdoi/31314121)
 
 ## Development news
 As of version 1.4, unwrapping is done according to the algorithm of von Bülow, Bullerjahn and Hummer (https://arxiv.org/pdf/2003.09205.pdf) to obtain correct diffusion coefficient at long times.
