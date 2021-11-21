@@ -34,10 +34,10 @@ void calc_shift(float *a, const std::vector<float> &b)
 }
 
 // This version (for unwrap) adds the shift to the shift accumulator
-void add_shift(float *a, const std::vector<float> &b, double shift[3])
+void add_shift(float *ref_pos, float prev_pos[3], const std::vector<float> &pbc, const std::vector<float> &oldpbc, double shift[3])
 {
   for (int c=0; c<3; c++)
-    shift[c] += floor (a[c] / b[c] + 0.5) * b[c];
+    shift[c] = shift[c] + (ref_pos[c] - prev_pos[c]) - floor((ref_pos[c] - prev_pos[c]) / pbc[c] + 0.5) * pbc[c] - floor((prev_pos[c]-shift[c])/oldpbc[c]+0.5)*(pbc[c]-oldpbc[c]);
   return;
 }
 
@@ -121,6 +121,8 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
   std::vector<float> prev_pos;
   std::vector<double> shifts;
   std::vector<float> PBC;
+  std::vector<float> PBC_prev;
+  PBC_prev.resize(6);
   std::vector<int> is_ref;
   float *coords;
 
@@ -174,7 +176,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
 
     } else if (!strncmp(cmd, "center", 4)) {
       if (unwrap) {
-        Tcl_SetResult(interp, (char *) "qwrap: qunwrap does not support the center option", TCL_STATIC);
+        Tcl_SetResult(interp, (char *) "qwrap: qtunwrap does not support the center option", TCL_STATIC);
         return TCL_ERROR;
       }
       Tcl_Obj *cmd = Tcl_ObjPrintf("atomselect top \"%s\"", Tcl_GetString(objv[i+1]));
@@ -341,27 +343,29 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
     // ********* get current PBC *******
     // except if unwrapping and at first frame, then it's not needed
 
-    if (!(unwrap && frame == first_frame)) {
-      Tcl_Obj *get_abc = Tcl_ObjPrintf ("molinfo top get {a b c alpha beta gamma}");
-      result = Tcl_EvalObjEx(interp, get_abc, TCL_EVAL_DIRECT);
-      if (result != TCL_OK) { return TCL_ERROR; }
+    if (unwrap && frame != first_frame) {
+        for (c = 0; c < 6; c++)
+            PBC_prev[c] = PBC[c];
+    }
+    Tcl_Obj *get_abc = Tcl_ObjPrintf ("molinfo top get {a b c alpha beta gamma}");
+    result = Tcl_EvalObjEx(interp, get_abc, TCL_EVAL_DIRECT);
+    if (result != TCL_OK) { return TCL_ERROR; }
 
-      object = Tcl_GetObjResult(interp);
-      {
-      int num = parse_vector(object, PBC, interp);
-        if (num != 6) {
-          Tcl_SetResult(interp, (char *) "qwrap: error parsing PBC", TCL_STATIC);
-          return TCL_ERROR;
-        }
-        if (PBC[0]*PBC[1]*PBC[2] == 0.0) {
-          Tcl_SetResult(interp, (char *) "qwrap: error: at least one PBC box length is zero", TCL_STATIC);
-          return TCL_ERROR;
-        }
-        if (PBC[3] != 90. || PBC[4] != 90. || PBC[5] != 90.) {
-          Tcl_SetResult(interp, (char *) "qwrap: non-orthorhombic cell detected, unsupported by qwrap; use PbcTools for this system", TCL_STATIC);
-          return TCL_ERROR;
-        }
-      }
+    object = Tcl_GetObjResult(interp);
+    {
+    int num = parse_vector(object, PBC, interp);
+    if (num != 6) {
+        Tcl_SetResult(interp, (char *) "qwrap: error parsing PBC", TCL_STATIC);
+        return TCL_ERROR;
+    }
+    if (PBC[0]*PBC[1]*PBC[2] == 0.0) {
+        Tcl_SetResult(interp, (char *) "qwrap: error: at least one PBC box length is zero", TCL_STATIC);
+        return TCL_ERROR;
+    }
+    if (PBC[3] != 90. || PBC[4] != 90. || PBC[5] != 90.) {
+        Tcl_SetResult(interp, (char *) "qwrap: non-orthorhombic cell detected, unsupported by qwrap; use PbcTools for this system", TCL_STATIC);
+        return TCL_ERROR;
+    }
     }
 
     // ********* get current coordinates *******
@@ -439,19 +443,21 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
       }
 
       if (unwrap) {
+        if (frame != first_frame) {
+          // Get the shift needed to unwrap the reference position, increment the shift counter
+          add_shift(ref_pos, &(prev_pos[current_block * 3]), PBC, PBC_prev, &(shifts[current_block * 3]));
+
+          // Actually shift all atoms within the unwrapping block
+          for (i = start_atom; i < current_atom; i++) {
+            for (c = 0; c < 3; c++) coords[3*selID[i] + c] = shifts[current_block * 3 + c];
+          }
+        } else {
+            for (c = 0; c < 3; c++) shifts[current_block * 3 + c] = ref_pos[c];
+        }
         for (c = 0; c < 3; c++) {
           float tmp = ref_pos[c]; // remember ref position
           ref_pos[c] -= prev_pos[current_block * 3 + c]; // new refpos is the displacement from previous one
           prev_pos[current_block * 3 + c] = tmp;  // save the refpos for next frame
-        }
-        if (frame != first_frame) {
-          // Get the shift needed to unwrap the reference position, increment the shift counter
-          add_shift(ref_pos, PBC, &(shifts[current_block * 3]));
-
-          // Actually shift all atoms within the unwrapping block
-          for (i = start_atom; i < current_atom; i++) {
-            for (c = 0; c < 3; c++) coords[3*selID[i] + c] -= shifts[current_block * 3 + c];
-          }
         }
 
       } else {
