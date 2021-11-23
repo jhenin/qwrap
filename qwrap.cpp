@@ -106,7 +106,7 @@ int parse_ivector (Tcl_Obj * const obj, std::vector<int> &vec, Tcl_Interp *inter
 
 static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * const objv[], bool unwrap)
 {
-  Tcl_Obj *atomselect, *object, *bytes, *centersel;
+  Tcl_Obj *atomselect, *object, *bytes, *centersel = NULL;
   int ncoords, result, length, ncenter, nsel;
   int num_frames, first_frame, last_frame;
   int num_atoms;
