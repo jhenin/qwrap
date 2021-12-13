@@ -12,8 +12,8 @@ load <path_to/>qwrap.so
 ```
 That's it, you can now use the `qwrap` command.
 
-## Installation
-To install under Linux and the like:
+## Installation on Unix-like systems
+First make sure Tcl development packages are installed (tcl-dev or tcl-devel).
 ```
 $ tar xf qwrap.tar.gz (in own directory) 
 $ make
