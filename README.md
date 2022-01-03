@@ -2,6 +2,13 @@
 [![DOI](https://zenodo.org/badge/31314121.svg)](https://zenodo.org/badge/latestdoi/31314121)
 
 ## Development news
+
+### Version 1.5, 2022-01-03
+
+This version reverts the change of unwrapping algorithm of the previous version, which was found to lead to distortion of molecules when unwrapping Gromacs trajectories atom-wise (`compound none`). Shifts are again computed as integer factors of the current cell basis vectors.
+
+### Version 1.4, 2021-05-25
+
 As of version 1.4, unwrapping is done according to the algorithm of von Bülow, Bullerjahn and Hummer (https://arxiv.org/pdf/2003.09205.pdf) to obtain correct diffusion coefficient at long times.
 Note that the algorithm used up to version 1.3 was already similar to this one, and gave only small, bounded deviations from the true long-time diffusion.
 

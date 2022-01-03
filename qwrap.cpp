@@ -33,11 +33,12 @@ void calc_shift(float *a, const std::vector<float> &b)
   return;
 }
 
-// This version (for unwrap) adds the shift to the shift accumulator
-void add_shift(float *a, const std::vector<float> &b, double shift[3])
+// This version (for unwrap) gets the shift as integers
+// (in units of PBC vectors)
+void calc_shift_int(float *a, const std::vector<float> &b, int shift[3])
 {
   for (int c=0; c<3; c++)
-    shift[c] += floor (a[c] / b[c] + 0.5) * b[c];
+    shift[c] = int(floor (a[c] / b[c] + 0.5));
   return;
 }
 
@@ -119,7 +120,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
   std::vector<int> centerID;
   std::vector<int> selID;
   std::vector<float> prev_pos;
-  std::vector<double> shifts;
+  std::vector<int> shifts;
   std::vector<float> PBC;
   std::vector<int> is_ref;
   float *coords;
@@ -445,12 +446,16 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
           prev_pos[current_block * 3 + c] = tmp;  // save the refpos for next frame
         }
         if (frame != first_frame) {
+          int shift[3];
           // Get the shift needed to unwrap the reference position, increment the shift counter
-          add_shift(ref_pos, PBC, &(shifts[current_block * 3]));
+          calc_shift_int(ref_pos, PBC, shift);
+          for (c = 0; c < 3; c++) {
+            shifts[current_block * 3 + c] += shift[c];
+          }
 
           // Actually shift all atoms within the unwrapping block
           for (i = start_atom; i < current_atom; i++) {
-            for (c = 0; c < 3; c++) coords[3*selID[i] + c] -= shifts[current_block * 3 + c];
+            for (c = 0; c < 3; c++) coords[3*selID[i] + c] -= shifts[current_block * 3 + c] * PBC[c];
           }
         }
 
