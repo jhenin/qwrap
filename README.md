@@ -6,6 +6,7 @@
 ### Version 1.5, 2022-01-03
 
 This version reverts the change of unwrapping algorithm of the previous version, which was found to lead to distortion of molecules when unwrapping Gromacs trajectories atom-wise (`compound none`). Shifts are again computed as integer factors of the current cell basis vectors.
+It turns out that the von Bülow unwrapping algorithm is not well-suited to qwrap's special treatment of groups of atoms (compounds), and I expect the bias in long-time diffusion from the qunwrap algorithm to be negligible.
 
 ### Version 1.4, 2021-05-25
 
@@ -38,7 +39,8 @@ To use in VMD:
 ```
 * `sel`: selection text indicating atoms to be wrapped
 * `first`, `last`: frames to be wrapped (defaults: 0 to -1, which means the last frame).
-* `compound`: wrap groups of atoms instead of individual atoms. Groups can be VMD's `res`idues (default), or custom groups defined by a common *integer* value of the `beta` parameter. If VMD has connectivity information (i.e. bonds are correctly set), the option `fragment` can be useful.
+* `compound`: wrap groups of atoms instead of individual atoms. Groups can be VMD's `res`idues or bonded `frag`ments (default), or custom groups defined by a common *integer* value of the `beta` parameter. The default option (fragment) corresponds to the wrapping behavior of NAMD; however it only works correctly if VMD has accurate connectivity information (eg. read from a PSF file).
+To undo GROMACS-style, atom-wise wrapping, use `compound none`.
 * `refatoms`: if `compound` is set, each group may be wrapped according to its geometric center, or to the center of a set of reference atoms within the group. Then reference atoms are defined by nonzero `occ`upancy (when converted to integer, that is, *greater than 1*). An example use is to wrap lipid molecules as residues, and give all phosphorus atoms nonzero occupancy so that each lipid has its phosphorus atom in the center unit cell.
 * `center`: the geometric center of the given selection text will be translated to (0, 0, 0). Not supported by qunwrap.
 
@@ -48,11 +50,16 @@ A classic use to wrap the solvent around a protein would be:
 qwrap sel "not protein" center protein
 ```
 
-To repair a protein complex that has been split across PBC, load a trajectory where **the first frame has the oligomer in one piece**, then run:
+To repair a protein complex that has been split across PBC by NAMD (wrapAll), load a trajectory where **the first frame has the oligomer in one piece**, then run:
 ```
-qunwrap sel protein compound fragment
+qunwrap sel protein
 ```
 You can then run the command above to wrap the solvent around the complex.
+
+To unwrap a GROMACS trajectory, make sure that the first frame has all molecules in one piece and run:
+```
+qunwrap compound none
+```
 
 ## Advanced definition of wrapping groups
 
@@ -63,6 +70,6 @@ If refatoms is not defined, the reference position is the center of the whole gr
 
 ## Limitations
 
-Compared with PBCTools it's a less flexible tool, mostly built to answer my own needs (e.g. orthorhombic cells only, the center of the cell is (0,0,0)...). But in my hands, it is 10 to 30 times faster. 
+Compared with PBCTools, qwrap is a less flexible tool (orthorhombic cells only, center of the cell fixed at (0,0,0)...), but it is many times faster.
 
 Please let me know if it is useful, and if you improve it, share it back! 

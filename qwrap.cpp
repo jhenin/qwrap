@@ -132,7 +132,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
 
   // Default Values
 
-  compound = RES;
+  compound = FRAGMENT; // Correct default for NAMD style wrapping
   first_frame = 0;
   last_frame = -1;
   ncenter = 0;
@@ -440,6 +440,14 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
       }
 
       if (unwrap) {
+        // ************ Unwrap **************
+        //
+        // Note on the unwrapping algorithm:
+        // We compare the current ref_pos to the *unmodified* reference position from the previous frame
+        // so we detect PBC jumps one at a time and accumulate them in the shifts array
+        // Other algorithms just wrap the current frame around the already unwrapped previous frame
+        // we don't do it so we don't have to recompute the reference position after unwrapping atom-wise
+        // this would be trivial for compound none, but not in other cases
         for (c = 0; c < 3; c++) {
           float tmp = ref_pos[c]; // remember ref position
           ref_pos[c] -= prev_pos[current_block * 3 + c]; // new refpos is the displacement from previous one
