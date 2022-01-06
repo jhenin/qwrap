@@ -119,7 +119,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
   std::vector<int> blockID;
   std::vector<int> centerID;
   std::vector<int> selID;
-  std::vector<float> prev_pos;
+  std::vector<float> prev_ref_pos;
   std::vector<int> shifts;
   std::vector<float> PBC;
   std::vector<int> is_ref;
@@ -266,7 +266,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
           blockID[i] = nblocks - 1;
         }
       }
-      prev_pos.resize(3 * nblocks);
+      prev_ref_pos.resize(3 * nblocks);
       shifts.resize(3 * nblocks);
     }
   }
@@ -448,14 +448,16 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
         // Other algorithms just wrap the current frame around the already unwrapped previous frame
         // we don't do it so we don't have to recompute the reference position after unwrapping atom-wise
         // this would be trivial for compound none, but not in other cases
+        // TODO: for unwrapping, ref_pos should not be the average, but the position of a single reference atom
+        // compounds should be kept whole by wrapping relative displacements within them
         for (c = 0; c < 3; c++) {
           float tmp = ref_pos[c]; // remember ref position
-          ref_pos[c] -= prev_pos[current_block * 3 + c]; // new refpos is the displacement from previous one
-          prev_pos[current_block * 3 + c] = tmp;  // save the refpos for next frame
+          ref_pos[c] -= prev_ref_pos[current_block * 3 + c]; // new refpos is the displacement from previous one
+          prev_ref_pos[current_block * 3 + c] = tmp;  // save the refpos for next frame
         }
         if (frame != first_frame) {
           int shift[3];
-          // Get the shift needed to unwrap the reference position, increment the shift counter
+          // Get the shift needed to unwrap the reference position displacement, increment the shift counter
           calc_shift_int(ref_pos, PBC, shift);
           for (c = 0; c < 3; c++) {
             shifts[current_block * 3 + c] += shift[c];
