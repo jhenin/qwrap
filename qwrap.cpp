@@ -381,18 +381,18 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
 
     if (!unwrap) {
       // ******** centering *******
-      float shift[3];
-      for (c = 0; c < 3; c++) shift[c] = 0.0;
       if ( ncenter != 0 ) {
+        float shift[3];
+        for (c = 0; c < 3; c++) shift[c] = 0.0;
         for (i = 0; i < ncenter; i++) {
           for (c = 0; c < 3; c++) shift[c] += coords[3 * centerID[i] + c];
         }
         for (c = 0; c < 3; c++) shift[c] /= ncenter;
-      }
 
-      for (i = 0; i < num_atoms; i++) {
-        for (c = 0; c < 3; c++) {
-          coords[3*i + c] -= shift[c];
+        for (i = 0; i < num_atoms; i++) {
+          for (c = 0; c < 3; c++) {
+            coords[3*i + c] -= shift[c];
+          }
         }
       }
     }
