@@ -1,18 +1,19 @@
 
-VERSION=1.5
+VERSION=1.6
 TCLINC=-I/usr/include/tcl8.6
-TCLLIB=-L/usr/lib64
+TCLLIB=-L/usr/lib64 -ltclstub8.6
 PLUGINDIR=${HOME}/lib/vmd/plugins/LINUXAMD64/tcl
 
 # Tested with g++ and clang++
 #CXX=g++
 #CXX=clang++
-CPPFLAGS=-fpic -O3 -Wall ${TCLINC} -DVERSION=\"${VERSION}\"
+CPPFLAGS=-fpic -O3 -Wall ${TCLINC} -DVERSION=\"${VERSION}\" -DUSE_TCL_STUBS
 
-all: qwrap.so pkgIndex.tcl
+all: qwrap.so.${VERSION} pkgIndex.tcl
 
-qwrap.so: qwrap.o
-	$(CXX) -shared qwrap.o -o qwrap.so ${TCLLIB} -ltcl
+qwrap.so.${VERSION}: qwrap.o
+	$(CXX) -shared qwrap.o -o qwrap.so.${VERSION} ${TCLLIB}
+	ln -s -f qwrap.so.${VERSION} qwrap.so
 
 qwrap.tar.gz: qwrap.cpp Makefile pkgIndex.tcl
 	tar czf qwrap${VERSION}.tar.gz qwrap.cpp Makefile pkgIndex.tcl

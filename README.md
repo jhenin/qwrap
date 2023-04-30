@@ -3,6 +3,10 @@
 
 ## Development news
 
+### Version 1.6, 2023-04-30
+
+Remove dynamically linked Tcl library and link tclstub library statically instead. This should make the shared object more portable.
+
 ### Version 1.5, 2022-01-03
 
 This version reverts the change of unwrapping algorithm of the previous version, which was found to lead to distortion of molecules when unwrapping Gromacs trajectories atom-wise (`compound none`). Shifts are again computed as integer factors of the current cell basis vectors.

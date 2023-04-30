@@ -520,6 +520,17 @@ static int obj_qunwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * 
 
 extern "C" {
   int Qwrap_Init(Tcl_Interp *interp) {
+
+#ifdef USE_TCL_STUBS
+    const char *version = Tcl_InitStubs(interp, "8.5", 0);
+#else
+    const char *version = Tcl_PkgRequire(interp, "Tcl", "8.5", 0);
+#endif
+
+    if (version == NULL) {
+      return TCL_ERROR;
+    }
+
     Tcl_CreateObjCommand(interp, "qwrap", obj_qwrap,
                     (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
     Tcl_CreateObjCommand(interp, "qunwrap", obj_qunwrap,
