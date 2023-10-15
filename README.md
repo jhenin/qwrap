@@ -17,29 +17,43 @@ It turns out that the von Bülow unwrapping algorithm is not well-suited to qwra
 As of version 1.4, unwrapping is done according to the algorithm of von Bülow, Bullerjahn and Hummer (https://arxiv.org/pdf/2003.09205.pdf) to obtain correct diffusion coefficient at long times.
 Note that the algorithm used up to version 1.3 was already similar to this one, and gave only small, bounded deviations from the true long-time diffusion.
 
-## Using without installing
-In a VMD terminal or TkCon:
+
+## Getting the library
+
+### Downloading the pre-built binary for Linux
+On Linux, you can just download the file [Linux/qwrap.so](https://github.com/jhenin/qwrap/raw/master/Linux/qwrap.so), save it somewhere and remember its full path.
+
+### Building on Unix-like systems
+First make sure Tcl development packages are installed (tcl-dev or tcl-devel).
+```
+tar xf qwrap.tar.gz (in own directory) 
+make
+```
+Optionally, install as a VMD plugin:
+```
+# update the PLUGINDIR variable in Makefile
+make install
+# use 'sudo make install' if VMD is installed system-wide rather than in your user directory
+```
+
+## Loading the library into VMD
+
+In the VMD terminal or TkConsole, type:
 ```
 load <path_to/>qwrap.so
 ```
-That's it, you can now use the `qwrap` command.
+Or, if you have installed qwrap as a VMD plugin:
+```
+package require qwrap
+```
+You can now use the `qwrap` and `qunwrap` commands.
 
-## Installation on Unix-like systems
-First make sure Tcl development packages are installed (tcl-dev or tcl-devel).
-```
-$ tar xf qwrap.tar.gz (in own directory) 
-$ make
-# update the PLUGINDIR variable in Makefile
-$ make install
-# use 'sudo make install' if VMD is not installed within your user directory
-```
 
 ## Usage
 To use in VMD:
 ```
-> package require qwrap
-> qwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [center <seltext>] [sel <seltext>]
-> qunwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [sel <seltext>]
+qwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [center <seltext>] [sel <seltext>]
+qunwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [sel <seltext>]
 ```
 * `sel`: selection text indicating atoms to be wrapped
 * `first`, `last`: frames to be wrapped (defaults: 0 to -1, which means the last frame).
