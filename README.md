@@ -40,8 +40,9 @@ make install
 
 In the VMD terminal or TkConsole, type:
 ```
-load <path_to/>qwrap.so
+load <path>/qwrap.so
 ```
+You can use the absolute or relative path, including '.' for the local directory.
 Or, if you have installed qwrap as a VMD plugin:
 ```
 package require qwrap
