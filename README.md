@@ -29,6 +29,12 @@ First make sure Tcl development packages are installed (tcl-dev or tcl-devel).
 tar xf qwrap.tar.gz (in own directory) 
 make
 ```
+
+For Macs with ARM64 processors (M1, M2, M3 etc.), try adapting the paths in `Makefile.OSX_ARM64` and running:
+```
+make -f Makefile.OSX_ARM64
+```
+
 Optionally, install as a VMD plugin:
 ```
 # update the PLUGINDIR variable in Makefile
