@@ -33,12 +33,20 @@ void calc_shift(float *a, const std::vector<float> &b)
   return;
 }
 
-// This version (for unwrap) gets the shift as integers
+// This version (for LATtice-based unwrapping) gets the shift as integers
 // (in units of PBC vectors)
 void calc_shift_int(float *a, const std::vector<float> &b, int shift[3])
 {
   for (int c=0; c<3; c++)
     shift[c] = int(floor (a[c] / b[c] + 0.5));
+  return;
+}
+
+// This version (for TORoidal-view unwrapping) adds the shift to the shift accumulator
+void add_shift(float *a, const std::vector<float> &b, double shift[3])
+{
+  for (int c=0; c<3; c++)
+    shift[c] += floor (a[c] / b[c] + 0.5) * b[c];
   return;
 }
 
@@ -105,7 +113,7 @@ int parse_ivector (Tcl_Obj * const obj, std::vector<int> &vec, Tcl_Interp *inter
 // ***************************************************************************************
 
 
-static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * const objv[], bool unwrap)
+static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * const objv[], bool unwrap, bool TOR)
 {
   Tcl_Obj *atomselect, *object, *bytes, *centersel = NULL;
   int ncoords, result, length, ncenter, nsel;
@@ -121,6 +129,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
   std::vector<int> selID;
   std::vector<float> prev_ref_pos;
   std::vector<int> shifts;
+  std::vector<double> shifts_TOR;
   std::vector<float> PBC;
   std::vector<int> is_ref;
   float *coords;
@@ -267,7 +276,11 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
         }
       }
       prev_ref_pos.resize(3 * nblocks);
-      shifts.resize(3 * nblocks);
+      if (TOR) {
+        shifts_TOR.resize(3 * nblocks);
+      } else {
+        shifts.resize(3 * nblocks);
+      }
     }
   }
 
@@ -440,35 +453,55 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
       }
 
       if (unwrap) {
-        // ************ Unwrap **************
-        //
-        // Note on the unwrapping algorithm:
-        // We compare the current ref_pos to the *unmodified* reference position from the previous frame
-        // so we detect PBC jumps one at a time and accumulate them in the shifts array
-        // Other algorithms just wrap the current frame around the already unwrapped previous frame
-        // we don't do it so we don't have to recompute the reference position after unwrapping atom-wise
-        // this would be trivial for compound none, but not in other cases
-        // TODO: for unwrapping, ref_pos should not be the average, but the position of a single reference atom
-        // compounds should be kept whole by wrapping relative displacements within them
+        // On all frames, record the reference position
         for (c = 0; c < 3; c++) {
           float tmp = ref_pos[c]; // remember ref position
           ref_pos[c] -= prev_ref_pos[current_block * 3 + c]; // new refpos is the displacement from previous one
           prev_ref_pos[current_block * 3 + c] = tmp;  // save the refpos for next frame
         }
-        if (frame != first_frame) {
-          int shift[3];
-          // Get the shift needed to unwrap the reference position displacement, increment the shift counter
-          calc_shift_int(ref_pos, PBC, shift);
-          for (c = 0; c < 3; c++) {
-            shifts[current_block * 3 + c] += shift[c];
-          }
 
-          // Actually shift all atoms within the unwrapping block
-          for (i = start_atom; i < current_atom; i++) {
-            for (c = 0; c < 3; c++) coords[3*selID[i] + c] -= shifts[current_block * 3 + c] * PBC[c];
+        // On frames after the first one, unwrap
+        if (frame != first_frame) {
+
+          if (TOR) {
+            // ************ TORoidal-view Unwrapping **************
+            // see Bullerjahn et al. for a comparison
+            // https://doi.org/10.1021/acs.jctc.3c00308
+
+            // Get the shift needed to unwrap the reference position, increment the floating-point shift
+            add_shift(ref_pos, PBC, &(shifts_TOR[current_block * 3]));
+
+            // Shift all atoms within the unwrapping block
+            for (i = start_atom; i < current_atom; i++) {
+              for (c = 0; c < 3; c++) coords[3*selID[i] + c] -= shifts_TOR[current_block * 3 + c];
+            }
+
+          } else {
+            // ************ LATt-ice-based Unwrapping **************
+            // see Bullerjahn et al. for a comparison
+            // https://doi.org/10.1021/acs.jctc.3c00308
+            // Note on the unwrapping algorithm:
+            // We compare the current ref_pos to the *unmodified* reference position from the previous frame
+            // so we detect PBC jumps one at a time and accumulate them in the shifts array
+            // Other algorithms just wrap the current frame around the already unwrapped previous frame
+            // we don't do it so we don't have to recompute the reference position after unwrapping atom-wise
+            // this would be trivial for compound none, but not in other cases
+            // TODO: for unwrapping, ref_pos should not be the average, but the position of a single reference atom
+            // compounds should be kept whole by wrapping relative displacements within them
+
+            int shift[3];
+            // Get the shift needed to unwrap the reference position displacement, increment the (integer) shift counter
+            calc_shift_int(ref_pos, PBC, shift);
+            for (c = 0; c < 3; c++) {
+              shifts[current_block * 3 + c] += shift[c];
+            }
+
+            // Shift all atoms within the unwrapping block
+            for (i = start_atom; i < current_atom; i++) {
+              for (c = 0; c < 3; c++) coords[3*selID[i] + c] -= shifts[current_block * 3 + c] * PBC[c];
+            }
           }
         }
-
       } else {
 
         // Get the shift needed to wrap the reference position
@@ -510,12 +543,17 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
 
 static int obj_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * const objv[])
 {
-    return do_qwrap(data, interp, argc, objv, false);
+    return do_qwrap(data, interp, argc, objv, false, false);
 }
 
 static int obj_qunwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * const objv[])
 {
-    return do_qwrap(data, interp, argc, objv, true);
+    return do_qwrap(data, interp, argc, objv, true, false);
+}
+
+static int obj_qunwrap_tor(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * const objv[])
+{
+    return do_qwrap(data, interp, argc, objv, true, true);
 }
 
 extern "C" {
@@ -534,6 +572,8 @@ extern "C" {
     Tcl_CreateObjCommand(interp, "qwrap", obj_qwrap,
                     (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
     Tcl_CreateObjCommand(interp, "qunwrap", obj_qunwrap,
+                    (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
+    Tcl_CreateObjCommand(interp, "qunwrap_tor", obj_qunwrap_tor,
                     (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
     Tcl_EvalEx(interp, "package provide qwrap " VERSION, -1, 0);
     return TCL_OK;
