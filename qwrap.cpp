@@ -1,6 +1,7 @@
 #include <tcl.h>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <cmath>
 #include <limits>
 #include <vector>
@@ -8,15 +9,14 @@
 /*
  * qwrap is a Tcl routine for VMD, with a C++(ish) implementation
  * it is equivalent to "pbc wrap -all -center origin"
- * there are two differences:
+ * with several differences:
  * 1) the center of each "wrapping block" is the reference point, rather than one given atom
  * 2) it's faster (up to 30 times in my tests)
  * 3) some options are hard-coded right now, they're the most likely ones for a
  *    trajectory from a NAMD biomolecular simulation.
  * 4) triclinic wrapping is available with the nearest option
- * 5) I can't count!
  *
- * Jerome Henin <jerome.henin@ibpc.fr> 2013-2020
+ * Jérôme Hénin <jerome.henin@cnrs.fr> 2013-2026
  */
 
 extern "C" {
@@ -242,7 +242,9 @@ int parse_ivector (Tcl_Obj * const obj, std::vector<int> &vec, Tcl_Interp *inter
 static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * const objv[], bool unwrap, bool TOR)
 {
   Tcl_Obj *atomselect, *object, *bytes, *centersel = NULL;
+  Tcl_Obj *axiscentersel[3];
   int ncoords, result, length, ncenter, nsel;
+  int naxiscenter[3];
   int num_frames, first_frame, last_frame;
   int num_atoms;
   int nearest_value;
@@ -253,6 +255,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
 
   std::vector<int> blockID;
   std::vector<int> centerID;
+  std::vector<int> axisCenterID[3];
   std::vector<int> selID;
   std::vector<float> prev_ref_pos;
   std::vector<int> shifts;
@@ -261,8 +264,16 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
   std::vector<int> is_ref;
   float *coords;
 
+  const char* usage =  "Available options:\n"
+"  [first <n>] [last <n>]: frame range to process (default: all)\n"
+"  [sel <seltext>]: selection of atoms to wrap (default: all)\n"
+"  [compound none|res|beta|fragment]: define wrapping blocks\n"
+"  [center <seltext>]: center the atoms in <seltext>\n"
+"  [centerx <seltext>] [centery <seltext>] [centerz <seltext>]: center the atoms in <seltext> along each axis\n"
+"  [nearest yes|no]: wrap to the nearest image (for triclinic cells)";
+
   if (argc % 2 != 1) {
-    Tcl_WrongNumArgs(interp, 1, objv, (char *)"[first <n>] [last <n>] [compound none|res|beta|fragment] [refatoms none|occ] [center <seltext>] [sel <seltext>]");
+    Tcl_WrongNumArgs(interp, 1, objv, usage);
     return TCL_ERROR;
   }
 
@@ -272,6 +283,10 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
   first_frame = 0;
   last_frame = -1;
   ncenter = 0;
+  for (c = 0; c < 3; c++) {
+    axiscentersel[c] = NULL;
+    naxiscenter[c] = 0;
+  }
   sel_text = NULL;
   refatoms = false;
   nearest = false;
@@ -318,6 +333,30 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
     } else if (!strncmp(cmd, "sel", 4)) {
       sel_text = Tcl_GetString(objv[i+1]);
 
+    } else if (!strcmp(cmd, "centerx") || !strcmp(cmd, "centery") || !strcmp(cmd, "centerz")) {
+      if (unwrap) {
+        Tcl_SetResult(interp, (char *) "qwrap: qunwrap does not support axis-specific center options", TCL_STATIC);
+        return TCL_ERROR;
+      }
+      int axis = 0;
+      if (cmd[6] == 'y') axis = 1;
+      else if (cmd[6] == 'z') axis = 2;
+      Tcl_Obj *axiscmd = Tcl_ObjPrintf("atomselect top \"%s\"", Tcl_GetString(objv[i+1]));
+      result = Tcl_EvalObjEx(interp, axiscmd, TCL_EVAL_DIRECT);
+      if (result != TCL_OK) {
+        Tcl_SetResult(interp, (char *) "qwrap: error calling atomselect for axis-specific center", TCL_STATIC);
+        return TCL_ERROR;
+      }
+      axiscentersel[axis] = Tcl_GetObjResult(interp);
+      Tcl_IncrRefCount(axiscentersel[axis]);
+      Tcl_Obj *script = Tcl_DuplicateObj(axiscentersel[axis]);
+      Tcl_AppendToObj (script, " get index", -1);
+      result = Tcl_EvalObjEx(interp, script, TCL_EVAL_DIRECT);
+      naxiscenter[axis] = parse_ivector(Tcl_GetObjResult(interp), axisCenterID[axis], interp, false );
+      if (naxiscenter[axis] < 1) {
+        Tcl_SetResult(interp, (char *) "qwrap: no atoms for axis-specific centering", TCL_STATIC);
+        return TCL_ERROR;
+      }
     } else if (!strncmp(cmd, "center", 4)) {
       if (unwrap) {
         Tcl_SetResult(interp, (char *) "qwrap: qunwrap does not support the center option", TCL_STATIC);
@@ -340,7 +379,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
         return TCL_ERROR;
       }
     } else {
-      Tcl_SetResult(interp, (char *) "Usage: qwrap [first <n>] [last <n>] [compound none|res|beta|fragment] [center <seltext>] [nearest yes|no]", TCL_STATIC);
+      Tcl_SetResult(interp, (char *) usage, TCL_STATIC);
       return TCL_ERROR;
     }
   }
@@ -539,13 +578,30 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
 
     if (!unwrap) {
       // ******** centering *******
-      if ( ncenter != 0 ) {
+      if ( ncenter != 0 || naxiscenter[0] != 0 || naxiscenter[1] != 0 || naxiscenter[2] != 0 ) {
         float shift[3];
         for (c = 0; c < 3; c++) shift[c] = 0.0;
-        for (i = 0; i < ncenter; i++) {
-          for (c = 0; c < 3; c++) shift[c] += coords[3 * centerID[i] + c];
+        if ( ncenter != 0 ) {
+          for (i = 0; i < ncenter; i++) {
+            for (c = 0; c < 3; c++) shift[c] += coords[3 * centerID[i] + c];
+          }
+          for (c = 0; c < 3; c++) shift[c] /= ncenter;
         }
-        for (c = 0; c < 3; c++) shift[c] /= ncenter;
+
+        for (c = 0; c < 3; c++) {
+          if (naxiscenter[c] != 0) {
+            shift[c] = 0.0;
+            int referenceID = axisCenterID[c][0];
+            for (i = 0; i < naxiscenter[c]; i++) {
+              float delta[3];
+              for (int d = 0; d < 3; d++)
+                delta[d] = coords[3 * axisCenterID[c][i] + d] - coords[3 * referenceID + d];
+              calc_shift(delta, PBC);
+              shift[c] += coords[3 * axisCenterID[c][i] + c] - delta[c];
+            }
+            shift[c] /= naxiscenter[c];
+          }
+        }
 
         for (i = 0; i < num_atoms; i++) {
           for (c = 0; c < 3; c++) {
@@ -688,6 +744,9 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
 
   Tcl_DecrRefCount(atomselect);
   if (ncenter != 0) Tcl_DecrRefCount(centersel);
+  for (c = 0; c < 3; c++) {
+    if (naxiscenter[c] != 0) Tcl_DecrRefCount(axiscentersel[c]);
+  }
   Tcl_SetResult(interp, (char *) "", TCL_STATIC);
   return TCL_OK;
 }

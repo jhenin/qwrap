@@ -79,7 +79,7 @@ make -f Makefile.OSX_ARM64 sign-vmd VMDAPP="/Applications/VMD 2.0.0a7-pre2.app"
 ## Usage
 To use in VMD:
 ```
-qwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]]  [sel <seltext>] [center <seltext>] [nearest yes|no]
+qwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [center <seltext>] [centerx <seltext>] [centery <seltext>] [centerz <seltext>] [sel <seltext>] [nearest yes|no]
 qunwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [sel <seltext>]
 ```
 * `sel`: selection text indicating atoms to be wrapped
@@ -91,12 +91,20 @@ To undo GROMACS-style, atom-wise wrapping, use `compound none`.
 ### `qwrap` options not supported by `qunwrap`
 
 * `center`: the geometric center of the given selection text will be translated to (0, 0, 0). 
+* `centerx`, `centery`, `centerz`: use a different center selection for one axis. If `center` is also given, it is used for the other axes.
 * `nearest yes`: enable wrapping for non-orthorhombic cells by translating each wrapping block's reference point to its nearest periodic image. This is useful for visualization of truncated-octahedron cells. The default is `no`; non-orthorhombic cells otherwise produce an error. Orthorhombic cells continue to use the existing fast path.
 
 ## Examples
 A classic use to wrap the solvent around a protein would be:
 ```
 qwrap sel "not protein" center protein
+```
+
+To use the normal protein center in x/y while centering z on a membrane selection:
+```
+qwrap sel all compound fragment \
+    center protein \
+    centerz "segname MEMB"
 ```
 
 To repair a protein complex that has been split across PBC by NAMD (wrapAll), load a trajectory where **the first frame has the oligomer in one piece**, then run:
