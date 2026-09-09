@@ -59,7 +59,7 @@ You can now use the `qwrap` and `qunwrap` commands.
 ## Usage
 To use in VMD:
 ```
-qwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [center <seltext>] [sel <seltext>]
+qwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [center <seltext>] [centerx <seltext>] [centery <seltext>] [centerz <seltext>] [sel <seltext>]
 qunwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [sel <seltext>]
 ```
 * `sel`: selection text indicating atoms to be wrapped
@@ -68,11 +68,19 @@ qunwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]]
 To undo GROMACS-style, atom-wise wrapping, use `compound none`.
 * `refatoms`: if `compound` is set, each group may be wrapped according to its geometric center, or to the center of a set of reference atoms within the group. Then reference atoms are defined by nonzero `occ`upancy (when converted to integer, that is, *greater than 1*). An example use is to wrap lipid molecules as residues, and give all phosphorus atoms nonzero occupancy so that each lipid has its phosphorus atom in the center unit cell.
 * `center`: the geometric center of the given selection text will be translated to (0, 0, 0). Not supported by qunwrap.
+* `centerx`, `centery`, `centerz`: use a different center selection for one axis. If `center` is also given, it is used for the other axes. Not supported by `qunwrap`.
 
 ## Examples
 A classic use to wrap the solvent around a protein would be:
 ```
 qwrap sel "not protein" center protein
+```
+
+To use the normal protein center in x/y while centering z on a membrane selection:
+```
+qwrap sel all compound fragment \
+    center protein \
+    centerz "segname MEMB"
 ```
 
 To repair a protein complex that has been split across PBC by NAMD (wrapAll), load a trajectory where **the first frame has the oligomer in one piece**, then run:
