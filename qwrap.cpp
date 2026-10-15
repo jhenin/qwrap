@@ -578,36 +578,21 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
 
     if (!unwrap) {
       // ******** centering *******
-      if ( ncenter != 0 || naxiscenter[0] != 0 || naxiscenter[1] != 0 || naxiscenter[2] != 0 ) {
+      if (ncenter != 0 || naxiscenter[0] != 0 || naxiscenter[1] != 0 || naxiscenter[2] != 0) {
         float shift[3];
-        for (c = 0; c < 3; c++) shift[c] = 0.0;
-        if ( ncenter != 0 ) {
-          for (i = 0; i < ncenter; i++) {
-            for (c = 0; c < 3; c++) shift[c] += coords[3 * centerID[i] + c];
-          }
-          for (c = 0; c < 3; c++) shift[c] /= ncenter;
-        }
-
         for (c = 0; c < 3; c++) {
-          if (naxiscenter[c] != 0) {
-            shift[c] = 0.0;
-            int referenceID = axisCenterID[c][0];
-            for (i = 0; i < naxiscenter[c]; i++) {
-              float delta[3];
-              for (int d = 0; d < 3; d++)
-                delta[d] = coords[3 * axisCenterID[c][i] + d] - coords[3 * referenceID + d];
-              calc_shift(delta, PBC);
-              shift[c] += coords[3 * axisCenterID[c][i] + c] - delta[c];
-            }
-            shift[c] /= naxiscenter[c];
-          }
+          const std::vector<int> &ids = (naxiscenter[c] != 0) ? axisCenterID[c] : centerID;
+          int n = (naxiscenter[c] != 0) ? naxiscenter[c] : ncenter;
+
+          shift[c] = 0.0;
+          for (i = 0; i < n; i++)
+            shift[c] += coords[3 * ids[i] + c];
+          shift[c] /= n;
         }
 
-        for (i = 0; i < num_atoms; i++) {
-          for (c = 0; c < 3; c++) {
+        for (i = 0; i < num_atoms; i++)
+          for (c = 0; c < 3; c++)
             coords[3*i + c] -= shift[c];
-          }
-        }
       }
     }
 
