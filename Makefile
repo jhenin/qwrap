@@ -1,5 +1,5 @@
 
-VERSION=1.6
+VERSION=1.7
 TCLINC=-I/usr/include/tcl8.6
 TCLLIB=-L/usr/lib64 -ltclstub8.6
 PLUGINDIR=${HOME}/lib/vmd/plugins/LINUXAMD64/tcl
@@ -14,11 +14,13 @@ all: qwrap.so.${VERSION} pkgIndex.tcl
 qwrap.so.${VERSION}: qwrap.o
 	$(CXX) -shared qwrap.o -o qwrap.so.${VERSION} ${TCLLIB}
 	ln -s -f qwrap.so.${VERSION} qwrap.so
+	cp qwrap.so.${VERSION} Linux_x86_64
+	cp qwrap.so Linux_x86_64
 
 qwrap.tar.gz: qwrap.cpp Makefile pkgIndex.tcl
 	tar czf qwrap${VERSION}.tar.gz qwrap.cpp Makefile pkgIndex.tcl
 
-pkgIndex.tcl: qwrap.so
+pkgIndex.tcl: qwrap.so.${VERSION}
 	tclsh mkindex.tcl
 
 clean:
