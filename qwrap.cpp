@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 /*
@@ -12,7 +13,7 @@
  * 2) it's faster (up to 30 times in my tests)
  * 3) some options are hard-coded right now, they're the most likely ones for a
  *    trajectory from a NAMD biomolecular simulation.
- * 4) it only deals with orthorhombic boxes
+ * 4) triclinic wrapping is available with the nearest option
  * 5) I can't count!
  *
  * Jerome Henin <jerome.henin@ibpc.fr> 2013-2020
@@ -31,6 +32,131 @@ void calc_shift(float *a, const std::vector<float> &b)
   for (int c=0; c<3; c++)
     a[c] = floor (a[c] / b[c] + 0.5) * b[c];
   return;
+}
+
+struct TriclinicCell {
+  double vectors[3][3];
+  double reciprocal[3][3];
+};
+
+bool build_triclinic_cell(const std::vector<float> &pbc, TriclinicCell &cell)
+{
+  for (int i = 0; i < 6; i++)
+    if (!std::isfinite(pbc[i])) return false;
+
+  const double radians = 3.14159265358979323846 / 180.0;
+  double alpha = pbc[3] * radians;
+  double beta = pbc[4] * radians;
+  double gamma = pbc[5] * radians;
+  double cos_alpha = cos(alpha);
+  double cos_beta = cos(beta);
+  double cos_gamma = cos(gamma);
+  double sin_gamma = sin(gamma);
+
+  if (pbc[0] <= 0.0f || pbc[1] <= 0.0f || pbc[2] <= 0.0f || fabs(sin_gamma) < 1e-12)
+    return false;
+
+  cell.vectors[0][0] = pbc[0];
+  cell.vectors[0][1] = 0.0;
+  cell.vectors[0][2] = 0.0;
+  cell.vectors[1][0] = pbc[1] * cos_gamma;
+  cell.vectors[1][1] = pbc[1] * sin_gamma;
+  cell.vectors[1][2] = 0.0;
+  cell.vectors[2][0] = pbc[2] * cos_beta;
+  cell.vectors[2][1] = pbc[2] * (cos_alpha - cos_beta * cos_gamma) / sin_gamma;
+  double cz_squared = double(pbc[2]) * pbc[2] -
+      cell.vectors[2][0] * cell.vectors[2][0] -
+      cell.vectors[2][1] * cell.vectors[2][1];
+  if (cz_squared <= 0.0)
+    return false;
+  cell.vectors[2][2] = sqrt(cz_squared);
+
+  double determinant = cell.vectors[0][0] * cell.vectors[1][1] * cell.vectors[2][2];
+  if (determinant <= 0.0)
+    return false;
+
+  // Rows of the inverse basis are the reciprocal lattice vectors.
+  cell.reciprocal[0][0] = cell.vectors[1][1] * cell.vectors[2][2] / determinant;
+  cell.reciprocal[0][1] = -cell.vectors[1][0] * cell.vectors[2][2] / determinant;
+  cell.reciprocal[0][2] = (cell.vectors[1][0] * cell.vectors[2][1] -
+                           cell.vectors[1][1] * cell.vectors[2][0]) / determinant;
+  cell.reciprocal[1][0] = 0.0;
+  cell.reciprocal[1][1] = cell.vectors[0][0] * cell.vectors[2][2] / determinant;
+  cell.reciprocal[1][2] = -cell.vectors[0][0] * cell.vectors[2][1] / determinant;
+  cell.reciprocal[2][0] = 0.0;
+  cell.reciprocal[2][1] = 0.0;
+  cell.reciprocal[2][2] = cell.vectors[0][0] * cell.vectors[1][1] / determinant;
+  return true;
+}
+
+bool calc_nearest_lattice_shift(const float position[3], const TriclinicCell &cell, double shift[3])
+{
+  double fractional[3];
+  long long center[3];
+  const long double min_index = static_cast<long double>(std::numeric_limits<long long>::min()) + 1.0L;
+  const long double max_index = static_cast<long double>(std::numeric_limits<long long>::max()) - 1.0L;
+  for (int i = 0; i < 3; i++) {
+    fractional[i] = 0.0;
+    for (int c = 0; c < 3; c++)
+      fractional[i] += cell.reciprocal[i][c] * position[c];
+    long double rounded = floor(static_cast<long double>(fractional[i]) + 0.5L);
+    if (!std::isfinite(rounded) || rounded < min_index || rounded > max_index)
+      return false;
+    center[i] = static_cast<long long>(rounded);
+  }
+
+  double residual[3] = {position[0], position[1], position[2]};
+  for (int i = 0; i < 3; i++)
+    for (int c = 0; c < 3; c++)
+      residual[c] -= center[i] * cell.vectors[i][c];
+  double best_squared = residual[0] * residual[0] + residual[1] * residual[1] + residual[2] * residual[2];
+  double best[3] = {double(center[0]), double(center[1]), double(center[2])};
+  long long lower[3], upper[3];
+
+  // A better candidate must lie within this reciprocal-space bound in every direction.
+  for (int i = 0; i < 3; i++) {
+    double reciprocal_norm = 0.0;
+    for (int c = 0; c < 3; c++)
+      reciprocal_norm += cell.reciprocal[i][c] * cell.reciprocal[i][c];
+    long double bound = sqrt(static_cast<long double>(best_squared) * reciprocal_norm);
+    long double epsilon = 1e-12L * (1.0L + fabs(fractional[i]) + bound);
+    long double low = ceil(static_cast<long double>(fractional[i]) - bound - epsilon);
+    long double high = floor(static_cast<long double>(fractional[i]) + bound + epsilon);
+    if (!std::isfinite(low) || !std::isfinite(high) || low < min_index ||
+      high > max_index || low > high)
+      return false;
+    lower[i] = static_cast<long long>(low);
+    upper[i] = static_cast<long long>(high);
+  }
+
+  for (long long i = lower[0];; i++) {
+    for (long long j = lower[1];; j++) {
+      for (long long k = lower[2];; k++) {
+        double candidate[3] = {position[0], position[1], position[2]};
+        long long indices[3] = {i, j, k};
+        for (int axis = 0; axis < 3; axis++)
+          for (int c = 0; c < 3; c++)
+            candidate[c] -= indices[axis] * cell.vectors[axis][c];
+        double squared = candidate[0] * candidate[0] + candidate[1] * candidate[1] + candidate[2] * candidate[2];
+        if (squared < best_squared) {
+          best_squared = squared;
+          best[0] = i;
+          best[1] = j;
+          best[2] = k;
+        }
+        if (k == upper[2]) break;
+      }
+      if (j == upper[1]) break;
+    }
+    if (i == upper[0]) break;
+  }
+
+  for (int c = 0; c < 3; c++) {
+    shift[c] = 0.0;
+    for (int axis = 0; axis < 3; axis++)
+      shift[c] += best[axis] * cell.vectors[axis][c];
+  }
+  return true;
 }
 
 // This version (for LATtice-based unwrapping) gets the shift as integers
@@ -119,8 +245,9 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
   int ncoords, result, length, ncenter, nsel;
   int num_frames, first_frame, last_frame;
   int num_atoms;
+  int nearest_value;
   enum { NONE, RES, BETA, FRAGMENT } compound;
-  bool refatoms;
+  bool refatoms, nearest;
   const char *sel_text;
   int i, c;
 
@@ -147,6 +274,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
   ncenter = 0;
   sel_text = NULL;
   refatoms = false;
+  nearest = false;
 
   // end default values
 
@@ -179,6 +307,14 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
         return TCL_ERROR;
       }
 
+    } else if (!strncmp(cmd, "nearest", 7)) {
+      if (unwrap) {
+        Tcl_SetResult(interp, (char *) "qwrap: nearest is only supported by qwrap", TCL_STATIC);
+        return TCL_ERROR;
+      }
+      if (Tcl_GetBooleanFromObj(interp, objv[i+1], &nearest_value) != TCL_OK) { return TCL_ERROR; }
+      nearest = nearest_value != 0;
+
     } else if (!strncmp(cmd, "sel", 4)) {
       sel_text = Tcl_GetString(objv[i+1]);
 
@@ -204,7 +340,7 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
         return TCL_ERROR;
       }
     } else {
-      Tcl_SetResult(interp, (char *) "Usage: qwrap [first <n>] [last <n>] [compound none|res|beta|fragment] [center <seltext>]", TCL_STATIC);
+      Tcl_SetResult(interp, (char *) "Usage: qwrap [first <n>] [last <n>] [compound none|res|beta|fragment] [center <seltext>] [nearest yes|no]", TCL_STATIC);
       return TCL_ERROR;
     }
   }
@@ -336,6 +472,8 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
 
   // Loop on frames
   for (int frame = first_frame; frame <= last_frame; frame++) {
+    bool orthorhombic = true;
+    TriclinicCell triclinic;
 
     if (frame % print == 0) {
       Tcl_Obj *msg = Tcl_ObjPrintf ("puts \"Frame %i\"", frame);
@@ -371,9 +509,16 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
           Tcl_SetResult(interp, (char *) "qwrap: error: at least one PBC box length is zero", TCL_STATIC);
           return TCL_ERROR;
         }
-        if (PBC[3] != 90. || PBC[4] != 90. || PBC[5] != 90.) {
-          Tcl_SetResult(interp, (char *) "qwrap: non-orthorhombic cell detected, unsupported by qwrap; use PbcTools for this system", TCL_STATIC);
-          return TCL_ERROR;
+        orthorhombic = PBC[3] == 90. && PBC[4] == 90. && PBC[5] == 90.;
+        if (!orthorhombic) {
+          if (!nearest || unwrap) {
+            Tcl_SetResult(interp, (char *) "qwrap: non-orthorhombic cell detected; use qwrap nearest yes to wrap to the nearest image", TCL_STATIC);
+            return TCL_ERROR;
+          }
+          if (!build_triclinic_cell(PBC, triclinic)) {
+            Tcl_SetResult(interp, (char *) "qwrap: invalid non-orthorhombic cell geometry", TCL_STATIC);
+            return TCL_ERROR;
+          }
         }
       }
     }
@@ -505,7 +650,16 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
       } else {
 
         // Get the shift needed to wrap the reference position
-        calc_shift(ref_pos, PBC);
+        if (orthorhombic) {
+          calc_shift(ref_pos, PBC);
+        } else {
+          double shift[3];
+          if (!calc_nearest_lattice_shift(ref_pos, triclinic, shift)) {
+            Tcl_SetResult(interp, (char *) "qwrap: could not calculate nearest periodic image", TCL_STATIC);
+            return TCL_ERROR;
+          }
+          for (c = 0; c < 3; c++) ref_pos[c] = float(shift[c]);
+        }
 
         // Actually shift all atoms within the wrapping block
         for (i = start_atom; i < current_atom; i++) {
@@ -569,13 +723,13 @@ extern "C" {
       return TCL_ERROR;
     }
 
+    Tcl_PkgProvide(interp, "qwrap", VERSION);
     Tcl_CreateObjCommand(interp, "qwrap", obj_qwrap,
                     (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
     Tcl_CreateObjCommand(interp, "qunwrap", obj_qunwrap,
                     (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
     Tcl_CreateObjCommand(interp, "qunwrap_tor", obj_qunwrap_tor,
                     (ClientData) NULL, (Tcl_CmdDeleteProc *) NULL);
-    Tcl_EvalEx(interp, "package provide qwrap " VERSION, -1, 0);
     return TCL_OK;
   }
 }

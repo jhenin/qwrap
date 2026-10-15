@@ -1,8 +1,9 @@
 
-VERSION=1.7
+VERSION=1.8
 TCLINC=-I/usr/include/tcl8.6
 TCLLIB=-L/usr/lib64 -ltclstub8.6
 PLUGINDIR=${HOME}/lib/vmd/plugins/LINUXAMD64/tcl
+VMD?=vmd
 
 # Tested with g++ and clang++
 #CXX=g++
@@ -29,3 +30,6 @@ clean:
 install: all
 	mkdir -p ${PLUGINDIR}/qwrap${VERSION} && \
 		rsync -av qwrap.so pkgIndex.tcl ${PLUGINDIR}/qwrap${VERSION}/.
+
+test: all
+	cd tests && ${VMD} -dispdev text -e test.vmd -eofexit

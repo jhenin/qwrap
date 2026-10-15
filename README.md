@@ -59,7 +59,7 @@ You can now use the `qwrap` and `qunwrap` commands.
 ## Usage
 To use in VMD:
 ```
-qwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [center <seltext>] [sel <seltext>]
+qwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [center <seltext>] [sel <seltext>] [nearest yes|no]
 qunwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [sel <seltext>]
 ```
 * `sel`: selection text indicating atoms to be wrapped
@@ -68,6 +68,7 @@ qunwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]]
 To undo GROMACS-style, atom-wise wrapping, use `compound none`.
 * `refatoms`: if `compound` is set, each group may be wrapped according to its geometric center, or to the center of a set of reference atoms within the group. Then reference atoms are defined by nonzero `occ`upancy (when converted to integer, that is, *greater than 1*). An example use is to wrap lipid molecules as residues, and give all phosphorus atoms nonzero occupancy so that each lipid has its phosphorus atom in the center unit cell.
 * `center`: the geometric center of the given selection text will be translated to (0, 0, 0). Not supported by qunwrap.
+* `nearest yes`: enable wrapping for non-orthorhombic cells by translating each wrapping block's reference point to its nearest periodic image. This is useful for visualization of truncated-octahedron cells. The default is `no`; non-orthorhombic cells otherwise produce an error. Orthorhombic cells continue to use the existing fast path. This option is not available for `qunwrap`.
 
 ## Examples
 A classic use to wrap the solvent around a protein would be:
@@ -95,6 +96,6 @@ If refatoms is not defined, the reference position is the center of the whole gr
 
 ## Limitations
 
-Compared with PBCTools, qwrap is a less flexible tool (orthorhombic cells only, center of the cell fixed at (0,0,0)...), but it is many times faster.
+Compared with PBCTools, qwrap is a less flexible tool (the cell center is fixed at (0,0,0), and qunwrap supports orthorhombic cells only), but it is many times faster.
 
 Please let me know if it is useful, and if you improve it, share it back! 
