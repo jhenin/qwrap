@@ -10,7 +10,7 @@ Add the `nearest` option for wrapping tajectories with triclinic periodic cells.
 
 ### Version 1.7, 2024-11-25
 
-Offer both the lattice-based and torus-based [Büllerjahn et al](https://doi.org/10.1021/acs.jctc.3c00308 unwrapping schemes, via `qunwrap` and `qunwrap_tor` respectively. `qunwrap_tor` is particularly suited for unwrapping constant-pressure trajectories with the aim of computing diffusion coefficients.
+Offer both the lattice-based and torus-based [Büllerjahn et al](https://doi.org/10.1021/acs.jctc.3c00308) unwrapping schemes, via `qunwrap` and `qunwrap_tor` respectively. `qunwrap_tor` is particularly suited for unwrapping constant-pressure trajectories with the aim of computing diffusion coefficients.
 
 ### Version 1.6, 2023-04-30
 
