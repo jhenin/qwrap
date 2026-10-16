@@ -3,6 +3,15 @@
 
 ## Development news
 
+### Version 1.8, 2026-10-15
+
+Add the `nearest` option for wrapping tajectories with triclinic periodic cells. Matches the behavior of NAMD's `wrapNearest` option. Allows for visualizing the cell as a rhombic dodecahedron (sample data from [Chen Lin et al.](https://doi.org/10.6084/m9.figshare.8003306)).
+![Illustration of rhombic dodecahedron box](https://github.com/jhenin/qwrap/blob/master/tests/MA-CA-SP1_trajectory/dodecahedra.webp) 
+
+### Version 1.7, 2024-11-25
+
+Offer both the lattice-based and torus-based [Büllerjahn et al](https://doi.org/10.1021/acs.jctc.3c00308 unwrapping schemes, via `qunwrap` and `qunwrap_tor` respectively. `qunwrap_tor` is particularly suited for unwrapping constant-pressure trajectories with the aim of computing diffusion coefficients.
+
 ### Version 1.6, 2023-04-30
 
 Remove dynamically linked Tcl library and link tclstub library statically instead. This should make the shared object more portable.
@@ -59,7 +68,7 @@ You can now use the `qwrap` and `qunwrap` commands.
 ## Usage
 To use in VMD:
 ```
-qwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [center <seltext>] [sel <seltext>] [nearest yes|no]
+qwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]]  [sel <seltext>] [center <seltext>] [nearest yes|no]
 qunwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]] [sel <seltext>]
 ```
 * `sel`: selection text indicating atoms to be wrapped
@@ -67,8 +76,11 @@ qunwrap [first n] [last n] [compound none|res|beta|fragment [refatoms occ|none]]
 * `compound`: wrap groups of atoms instead of individual atoms. Groups can be VMD's `res`idues or bonded `frag`ments (default), or custom groups defined by a common *integer* value of the `beta` parameter. The default option (fragment) corresponds to the wrapping behavior of NAMD; however it only works correctly if VMD has accurate connectivity information (eg. read from a PSF file).
 To undo GROMACS-style, atom-wise wrapping, use `compound none`.
 * `refatoms`: if `compound` is set, each group may be wrapped according to its geometric center, or to the center of a set of reference atoms within the group. Then reference atoms are defined by nonzero `occ`upancy (when converted to integer, that is, *greater than 1*). An example use is to wrap lipid molecules as residues, and give all phosphorus atoms nonzero occupancy so that each lipid has its phosphorus atom in the center unit cell.
-* `center`: the geometric center of the given selection text will be translated to (0, 0, 0). Not supported by qunwrap.
-* `nearest yes`: enable wrapping for non-orthorhombic cells by translating each wrapping block's reference point to its nearest periodic image. This is useful for visualization of truncated-octahedron cells. The default is `no`; non-orthorhombic cells otherwise produce an error. Orthorhombic cells continue to use the existing fast path. This option is not available for `qunwrap`.
+
+### `qwrap` options not supported by `qunwrap`
+
+* `center`: the geometric center of the given selection text will be translated to (0, 0, 0). 
+* `nearest yes`: enable wrapping for non-orthorhombic cells by translating each wrapping block's reference point to its nearest periodic image. This is useful for visualization of truncated-octahedron cells. The default is `no`; non-orthorhombic cells otherwise produce an error. Orthorhombic cells continue to use the existing fast path.
 
 ## Examples
 A classic use to wrap the solvent around a protein would be:
