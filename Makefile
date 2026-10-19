@@ -32,4 +32,4 @@ install: all
 		rsync -av qwrap.so* pkgIndex.tcl ${PLUGINDIR}/qwrap${VERSION}/.
 
 test: all
-	cd tests && ${VMD} -dispdev text -e test.vmd -eofexit
+	cd tests && ${VMD} -dispdev text -e test.tcl -eofexit
