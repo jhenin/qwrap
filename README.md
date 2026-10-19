@@ -39,17 +39,14 @@ tar xf qwrap.tar.gz (in own directory)
 make
 ```
 
-For Macs with ARM64 processors (M1, M2, M3 etc.), try adapting the paths in `Makefile.OSX_ARM64` and running:
-```
-make -f Makefile.OSX_ARM64
-```
-
 Optionally, install as a VMD plugin:
 ```
 # update the PLUGINDIR variable in Makefile
 make install
 # use 'sudo make install' if VMD is installed system-wide rather than in your user directory
 ```
+
+
 
 ## Loading the library into VMD
 
@@ -63,6 +60,20 @@ Or, if you have installed qwrap as a VMD plugin:
 package require qwrap
 ```
 You can now use the `qwrap` and `qunwrap` commands.
+
+
+## MacOS-specific notes
+
+For Macs with ARM64 processors (M1, M2, M3 etc.), try adapting the paths in `Makefile.OSX_ARM64` and running:
+```
+make -f Makefile.OSX_ARM64
+```
+
+Some VMD builds for macOS (e.g. 2.0 alphas) use the hardened runtime, which refuses to load self-built (ad-hoc signed) libraries (see https://github.com/jhenin/qwrap/issues/9). If loading `qwrap.so` fails with a code-signature error, re-sign the VMD executable with the `disable-library-validation` entitlement (this modifies the VMD app in place; existing entitlements are kept):
+```
+make -f Makefile.OSX_ARM64 sign-vmd VMDAPP="/Applications/VMD 2.0.0a7-pre2.app"
+# set VMDBIN=... if the executable is not at Contents/vmd2/lib/vmd_MACOSXARM64
+```
 
 
 ## Usage
