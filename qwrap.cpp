@@ -499,9 +499,19 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
     Tcl_SetResult(interp, (char *) "qwrap: error parsing number of frames", TCL_STATIC);
     return TCL_ERROR;
   }
+  if (num_frames < 1) {
+    Tcl_SetResult(interp, (char *) "qwrap: no frames in trajectory", TCL_STATIC);
+    return TCL_ERROR;
+  }
 
   if ( first_frame < 0 || first_frame >= num_frames ) {
-    Tcl_SetResult(interp, (char *) "qwrap: illegal value of first_frame", TCL_STATIC);
+    Tcl_Obj *msg = Tcl_ObjPrintf ("puts \"qwrap: first_frame %i is out of range (0..%i)\"", first_frame, num_frames-1);
+    Tcl_SetResult(interp, Tcl_GetString(msg), TCL_STATIC);
+    return TCL_ERROR;
+  }
+  if (last_frame < -1 || last_frame >= num_frames) {
+    Tcl_Obj *msg = Tcl_ObjPrintf ("puts \"qwrap: last_frame %i is out of range (0..%i)\"", last_frame, num_frames-1);
+    Tcl_SetResult(interp, Tcl_GetString(msg), TCL_STATIC);
     return TCL_ERROR;
   }
   if ( last_frame == -1 || last_frame >= num_frames ) last_frame = num_frames - 1;
