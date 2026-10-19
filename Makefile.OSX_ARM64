@@ -1,9 +1,9 @@
 
-VERSION=1.6
+VERSION=1.8
 VMDDIR="/Applications/VMD\ 1.9.4a55-arm64-Rev11.app/Contents/vmd"
 TCLINC=-I/usr/include/tcl8.6
 #TCLLIB=-L/usr/lib64 -ltclstub8.6
-PLUGINDIR=${VMDDIR}/plugins/MACOSXAMD64/tcl
+PLUGINDIR=${VMDDIR}/plugins/MACOSXARM64/tcl
 FRAMEWORK=-F ${VMDDIR}/../Frameworks -framework Tcl
 
 # Tested with g++ and clang++
@@ -30,3 +30,23 @@ install: all
 	mkdir -p ${PLUGINDIR}/qwrap${VERSION} && \
 		rsync -av qwrap.so pkgIndex.tcl ${PLUGINDIR}/qwrap${VERSION}/.
 
+
+# Re-sign the VMD executable with com.apple.security.cs.disable-library-validation,
+# so that a hardened-runtime VMD build accepts this (ad-hoc signed) plugin.
+# Existing entitlements are preserved; hardened runtime is kept only if already on.
+# Modifies the VMD app in place (may need sudo). Example:
+#   make -f Makefile.OSX_ARM64 sign-vmd VMDAPP="/Applications/VMD 2.0.0a7-pre2.app"
+VMDAPP?=/Applications/VMD 2.0.0a7-pre2.app
+VMDBIN?=$(VMDAPP)/Contents/vmd2/lib/vmd_MACOSXARM64
+
+sign-vmd:
+	@test -f "$(VMDBIN)" || { echo "VMD executable not found: $(VMDBIN)"; exit 1; }
+	codesign -d --entitlements - --xml "$(VMDBIN)" > vmd-ent.plist 2>/dev/null || true
+	[ -s vmd-ent.plist ] || cp entitlements.plist vmd-ent.plist
+	plutil -replace 'com\.apple\.security\.cs\.disable-library-validation' -bool YES vmd-ent.plist
+	OPTS=; codesign -dv "$(VMDBIN)" 2>&1 | grep -q '^CodeDirectory.*flags=.*runtime' && OPTS="--options runtime"; \
+		codesign --force --sign - $$OPTS --entitlements vmd-ent.plist "$(VMDBIN)"
+	-xattr -dr com.apple.quarantine "$(VMDAPP)"
+	rm -f vmd-ent.plist
+
+.PHONY: all clean install sign-vmd
