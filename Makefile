@@ -29,7 +29,7 @@ clean:
 
 install: all
 	mkdir -p ${PLUGINDIR}/qwrap${VERSION} && \
-		rsync -av qwrap.so pkgIndex.tcl ${PLUGINDIR}/qwrap${VERSION}/.
+		rsync -av qwrap.so* pkgIndex.tcl ${PLUGINDIR}/qwrap${VERSION}/.
 
 test: all
 	cd tests && ${VMD} -dispdev text -e test.vmd -eofexit
