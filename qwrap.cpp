@@ -579,14 +579,25 @@ static int do_qwrap(ClientData data, Tcl_Interp *interp, int argc, Tcl_Obj * con
     if (!unwrap) {
       // ******** centering *******
       if (ncenter != 0 || naxiscenter[0] != 0 || naxiscenter[1] != 0 || naxiscenter[2] != 0) {
-        float shift[3];
-        for (c = 0; c < 3; c++) {
-          const std::vector<int> &ids = (naxiscenter[c] != 0) ? axisCenterID[c] : centerID;
-          int n = (naxiscenter[c] != 0) ? naxiscenter[c] : ncenter;
+        float shift[3] = {0.0f, 0.0f, 0.0f};
 
-          shift[c] = 0.0;
+        for (c = 0; c < 3; c++) {
+          int n;
+          const std::vector<int> *ids;
+
+          if (naxiscenter[c] != 0) {
+            n   = naxiscenter[c];
+            ids = &axisCenterID[c];
+          } else if (ncenter != 0) {
+            n   = ncenter;
+            ids = &centerID;
+          } else {
+            // No selection defined for this axis: leave it unshifted.
+            continue;
+          }
+
           for (i = 0; i < n; i++)
-            shift[c] += coords[3 * ids[i] + c];
+            shift[c] += coords[3 * (*ids)[i] + c];
           shift[c] /= n;
         }
 
